@@ -1,101 +1,246 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { Conversation, EvaluationResult, Role, Criteria } from "../types";
 
-// Lazy initialize to prevent startup crashes when API key is missing
-let aiInstance: GoogleGenAI | null = null;
-const getAI = (): GoogleGenAI => {
-  if (aiInstance) return aiInstance;
-  
-  const apiKey = process.env.API_KEY || (typeof window !== 'undefined' ? localStorage.getItem('evalai_api_key') : '');
-  if (!apiKey) {
-    throw new Error("Gemini API Key is missing. Please configuration GEMINI_API_KEY in your env or GitHub secrets.");
+export interface LLMConfig {
+  provider: 'gemini' | 'openai' | 'anthropic';
+  geminiKey: string;
+  geminiModel: string;
+  geminiBaseUrl: string;
+  openaiKey: string;
+  openaiModel: string;
+  openaiBaseUrl: string;
+  anthropicKey: string;
+  anthropicModel: string;
+  anthropicBaseUrl: string;
+}
+
+/**
+ * Dynamically retrieves user configuration from LocalStorage or environment fallback
+ */
+export const getLLMConfig = (): LLMConfig => {
+  if (typeof window === 'undefined') {
+    return {
+      provider: 'gemini',
+      geminiKey: process.env.API_KEY || process.env.GEMINI_API_KEY || '',
+      geminiModel: 'gemini-2.5-flash',
+      geminiBaseUrl: '',
+      openaiKey: '',
+      openaiModel: 'gpt-4o-mini',
+      openaiBaseUrl: '',
+      anthropicKey: '',
+      anthropicModel: 'claude-3-5-sonnet-20241022',
+      anthropicBaseUrl: '',
+    };
   }
+
+  // Backwards compatibility with previous key 'evalai_api_key'
+  const fallbackGeminiKey = localStorage.getItem('evalai_api_key') || '';
   
-  aiInstance = new GoogleGenAI({
-    apiKey,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build'
-      }
-    }
-  });
-  return aiInstance;
+  return {
+    provider: (localStorage.getItem('evalai_provider') as any) || 'gemini',
+    geminiKey: localStorage.getItem('evalai_gemini_api_key') || fallbackGeminiKey || process.env.API_KEY || process.env.GEMINI_API_KEY || '',
+    geminiModel: localStorage.getItem('evalai_gemini_model') || 'gemini-3.5-flash',
+    geminiBaseUrl: localStorage.getItem('evalai_gemini_base_url') || '',
+    openaiKey: localStorage.getItem('evalai_openai_api_key') || '',
+    openaiModel: localStorage.getItem('evalai_openai_model') || 'gpt-4o-mini',
+    openaiBaseUrl: localStorage.getItem('evalai_openai_base_url') || '',
+    anthropicKey: localStorage.getItem('evalai_anthropic_api_key') || '',
+    anthropicModel: localStorage.getItem('evalai_anthropic_model') || 'claude-3-5-sonnet-20241022',
+    anthropicBaseUrl: localStorage.getItem('evalai_anthropic_base_url') || '',
+  };
 };
 
 /**
- * Step 1: Verify facts using Google Search Grounding
+ * Instantiates the Gemini SDK client dynamically
+ */
+const getAI = (): GoogleGenAI => {
+  const config = getLLMConfig();
+  const apiKey = config.geminiKey;
+  if (!apiKey) {
+    throw new Error("Gemini API Key is missing. Please configure it in your Settings dashboard.");
+  }
+  
+  const options: any = {
+    apiKey,
+  };
+  
+  if (config.geminiBaseUrl) {
+    options.baseURL = config.geminiBaseUrl;
+  }
+
+  options.httpOptions = {
+    headers: {
+      'User-Agent': 'aistudio-build'
+    }
+  };
+
+  return new GoogleGenAI(options);
+};
+
+/**
+ * Step 1: Verify facts using Google Search Grounding (Gemini) or LLM self-fact checking (OpenAI/Anthropic)
  */
 export const performFactCheck = async (conversation: Conversation): Promise<{ text: string, sources: Array<{uri: string, title: string}> }> => {
-  const model = "gemini-3.5-flash"; // Flash is good for fast search/retrieval
-  
-  // Extract only model claims or the full flow to check
+  const config = getLLMConfig();
   const transcript = conversation.messages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
 
   const prompt = `
     Analyze the following conversation for factual accuracy. 
-    Use Google Search to verify specific claims made by the 'MODEL'.
+    Use your available knowledge to verify specific claims made by the 'MODEL'.
     
     Conversation:
     ${transcript}
 
-    Provide a concise "Fact Check Report" listing any inaccuracies found. 
-    If all claims are accurate, state that.
+    Provide a concise "Fact Check Report" listing any inaccuracies or hallucinations found. 
+    If all claims are accurate, state that explicitly.
   `;
 
-  try {
-    const response = await getAI().models.generateContent({
-      model,
-      contents: prompt,
-      config: {
-        tools: [{ googleSearch: {} }], // Enable Search Tool
-        // responseMimeType cannot be JSON when using tools in this SDK version context
-      }
-    });
-
-    // Extract sources from grounding metadata
-    const sources: Array<{uri: string, title: string}> = [];
-    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-    
-    if (chunks) {
-      chunks.forEach((chunk: any) => {
-        if (chunk.web?.uri && chunk.web?.title) {
-          sources.push({
-            uri: chunk.web.uri,
-            title: chunk.web.title
-          });
+  // Gemini uses Web Search Grounding if configured
+  if (config.provider === 'gemini') {
+    try {
+      const model = config.geminiModel || "gemini-3.5-flash";
+      const response = await getAI().models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          tools: [{ googleSearch: {} }], // Enable real-time Google Search Grounding
         }
       });
+
+      const sources: Array<{uri: string, title: string}> = [];
+      const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+      
+      if (chunks) {
+        chunks.forEach((chunk: any) => {
+          if (chunk.web?.uri && chunk.web?.title) {
+            sources.push({
+              uri: chunk.web.uri,
+              title: chunk.web.title
+            });
+          }
+        });
+      }
+
+      return {
+        text: response.text || "No fact check analysis generated.",
+        sources
+      };
+    } catch (error) {
+      console.warn("Gemini Fact check failed, falling back to basic check", error);
     }
-
-    return {
-      text: response.text || "No fact check analysis generated.",
-      sources
-    };
-
-  } catch (error) {
-    console.warn("Fact check failed", error);
-    return { text: "Fact check could not be completed.", sources: [] };
   }
+
+  // OpenAI self-check
+  if (config.provider === 'openai') {
+    try {
+      if (!config.openaiKey) {
+        return { text: "OpenAI API Key is missing. Cannot perform fact check.", sources: [] };
+      }
+      const endpoint = config.openaiBaseUrl 
+        ? `${config.openaiBaseUrl.replace(/\/$/, '')}/chat/completions` 
+        : 'https://api.openai.com/v1/chat/completions';
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.openaiKey}`
+        },
+        body: JSON.stringify({
+          model: config.openaiModel || 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: 'You are an objective Fact Verification Assistant.' },
+            { role: 'user', content: prompt }
+          ]
+        })
+      });
+
+      if (!response.ok) throw new Error(`OpenAI status ${response.status}`);
+      const data = await response.json();
+      const text = data.choices?.[0]?.message?.content || "No analysis provided.";
+      return { text, sources: [] };
+    } catch (e) {
+      console.error("OpenAI Fact check failed", e);
+      return { text: "OpenAI Fact check could not be completed.", sources: [] };
+    }
+  }
+
+  // Anthropic Claude self-check
+  if (config.provider === 'anthropic') {
+    try {
+      if (!config.anthropicKey) {
+        return { text: "Anthropic API Key is missing. Cannot perform fact check.", sources: [] };
+      }
+      const endpoint = config.anthropicBaseUrl 
+        ? `${config.anthropicBaseUrl.replace(/\/$/, '')}/messages` 
+        : 'https://api.anthropic.com/v1/messages';
+
+      const headers: Record<string, string> = {
+        'content-type': 'application/json'
+      };
+      if (config.anthropicBaseUrl && (config.anthropicBaseUrl.includes('openai') || config.anthropicBaseUrl.includes('openrouter'))) {
+        headers['Authorization'] = `Bearer ${config.anthropicKey}`;
+      } else {
+        headers['X-API-Key'] = config.anthropicKey;
+        headers['anthropic-version'] = '2023-06-01';
+      }
+
+      let payload: any;
+      if (config.anthropicBaseUrl && (config.anthropicBaseUrl.includes('openrouter') || config.anthropicBaseUrl.includes('openai'))) {
+        payload = {
+          model: config.anthropicModel || 'claude-3-5-sonnet-20241022',
+          messages: [
+            { role: 'system', content: 'You are an objective Fact Verification Assistant.' },
+            { role: 'user', content: prompt }
+          ]
+        };
+      } else {
+        payload = {
+          model: config.anthropicModel || 'claude-3-5-sonnet-20241022',
+          max_tokens: 1500,
+          system: 'You are an objective Fact Verification Assistant.',
+          messages: [
+            { role: 'user', content: prompt }
+          ]
+        };
+      }
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) throw new Error(`Claude status ${response.status}`);
+      const data = await response.json();
+      let text = "No analysis provided.";
+      if (data.content && Array.isArray(data.content)) {
+        text = data.content[0]?.text;
+      } else if (data.choices?.[0]?.message?.content) {
+        text = data.choices[0].message.content;
+      }
+      return { text, sources: [] };
+    } catch (e) {
+      console.error("Anthropic Fact check failed", e);
+      return { text: "Anthropic Fact check could not be completed.", sources: [] };
+    }
+  }
+
+  return { text: "Fact check could not be completed.", sources: [] };
 };
 
 /**
- * Step 2: Evaluate using LLM-as-a-Judge (G-Eval) with optional context and fact check report
+ * Step 2: Evaluate using G-Eval with custom criteria and context and fact check
  */
 export const evaluateConversation = async (
   conversation: Conversation, 
   criteria: Criteria[],
   factCheckData?: { text: string, sources: any[] }
 ): Promise<EvaluationResult> => {
-  // Use Pro for complex reasoning if available, otherwise Flash
-  const model = "gemini-3.5-flash"; 
-  
+  const config = getLLMConfig();
   const transcript = conversation.messages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
-
-  // Build dynamic criteria string
   const criteriaText = criteria.map((c, i) => `${i + 1}. ${c.name}: ${c.description}`).join('\n    ');
 
-  // Construct context blocks
   let contextBlock = "";
   if (conversation.domainContext) {
     contextBlock += `\n    DOMAIN CONTEXT / KNOWLEDGE BASE:\n    ${conversation.domainContext}\n`;
@@ -104,7 +249,7 @@ export const evaluateConversation = async (
     contextBlock += `\n    GROUND TRUTH / REFERENCE ANSWER:\n    ${conversation.referenceContext}\n`;
   }
   if (factCheckData) {
-    contextBlock += `\n    FACT CHECK REPORT (Verified via Google Search):\n    ${factCheckData.text}\n`;
+    contextBlock += `\n    FACT CHECK REPORT:\n    ${factCheckData.text}\n`;
   }
 
   const systemInstruction = `
@@ -117,14 +262,31 @@ export const evaluateConversation = async (
     ${criteriaText}
 
     Instructions:
-    - If "Ground Truth" is provided, penalized the model if it deviates significantly from the intent or facts of the ground truth.
-    - If "Fact Check Report" indicates inaccuracies, strictly penalize the 'Accuracy' or 'Safety' or 'Trustfulness' scores.
+    - If "Ground Truth" is provided, penalize the model if it deviates significantly from the intent or facts of the ground truth.
+    - If "Fact Check Report" indicates inaccuracies, strictly penalize the 'Accuracy' or relevant scores.
     - Provide a JSON response with scores, reasoning for each score, an overall summary, and a weighted overall score.
+
+    IMPORTANT: You must output a JSON object adhering STRICTLY to this JSON structure:
+    {
+      "overallScore": <number from 1 to 10>,
+      "summary": "<concise executive summary paragraph>",
+      "suggestedImprovements": "<actionable bullet points>",
+      "metrics": [
+        {
+          "name": "<Criterion name>",
+          "score": <number from 1 to 10>,
+          "reasoning": "<evaluation reasoning for this score>"
+        },
+        ...
+      ]
+    }
   `;
 
   const prompt = `Evaluate the following conversation transcript:\n\n${transcript}`;
 
-  try {
+  // 1. GEMINI EVALUATION
+  if (config.provider === 'gemini') {
+    const model = config.geminiModel || "gemini-3.5-flash"; 
     const response = await getAI().models.generateContent({
       model,
       contents: prompt,
@@ -160,54 +322,336 @@ export const evaluateConversation = async (
       return {
         ...result,
         timestamp: Date.now(),
-        // Pass through the fact check data to the result object for display
         factCheckReport: factCheckData?.text,
         factCheckSources: factCheckData?.sources
       };
     }
-    
     throw new Error("No response text from Gemini");
-
-  } catch (error) {
-    console.error("Evaluation failed", error);
-    throw error;
   }
+
+  // 2. OPENAI EVALUATION
+  if (config.provider === 'openai') {
+    if (!config.openaiKey) {
+      throw new Error("OpenAI API Key is missing in Settings.");
+    }
+    const endpoint = config.openaiBaseUrl 
+      ? `${config.openaiBaseUrl.replace(/\/$/, '')}/chat/completions` 
+      : 'https://api.openai.com/v1/chat/completions';
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.openaiKey}`
+      },
+      body: JSON.stringify({
+        model: config.openaiModel || 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: systemInstruction },
+          { role: 'user', content: prompt }
+        ],
+        response_format: { type: "json_object" }
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`OpenAI error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    const text = data.choices?.[0]?.message?.content;
+    if (!text) throw new Error("Empty response from OpenAI");
+
+    const result = JSON.parse(text) as Omit<EvaluationResult, 'timestamp'>;
+    return {
+      ...result,
+      timestamp: Date.now(),
+      factCheckReport: factCheckData?.text,
+      factCheckSources: factCheckData?.sources
+    };
+  }
+
+  // 3. ANTHROPIC EVALUATION
+  if (config.provider === 'anthropic') {
+    if (!config.anthropicKey) {
+      throw new Error("Anthropic API Key is missing in Settings.");
+    }
+    const endpoint = config.anthropicBaseUrl 
+      ? `${config.anthropicBaseUrl.replace(/\/$/, '')}/messages` 
+      : 'https://api.anthropic.com/v1/messages';
+
+    const headers: Record<string, string> = {
+      'content-type': 'application/json'
+    };
+
+    const isOpenAiProxy = config.anthropicBaseUrl && (config.anthropicBaseUrl.includes('openai') || config.anthropicBaseUrl.includes('openrouter'));
+
+    if (isOpenAiProxy) {
+      headers['Authorization'] = `Bearer ${config.anthropicKey}`;
+    } else {
+      headers['X-API-Key'] = config.anthropicKey;
+      headers['anthropic-version'] = '2023-06-01';
+    }
+
+    let payload: any;
+    if (isOpenAiProxy) {
+      payload = {
+        model: config.anthropicModel || 'claude-3-5-sonnet-20241022',
+        messages: [
+          { role: 'system', content: systemInstruction },
+          { role: 'user', content: prompt }
+        ],
+        response_format: { type: "json_object" }
+      };
+    } else {
+      payload = {
+        model: config.anthropicModel || 'claude-3-5-sonnet-20241022',
+        max_tokens: 4000,
+        system: systemInstruction,
+        messages: [
+          { role: 'user', content: `${prompt}\n\nPlease respond with valid JSON only.` }
+        ]
+      };
+    }
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Claude error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    let text = "";
+    if (data.content && Array.isArray(data.content)) {
+      text = data.content[0]?.text;
+    } else if (data.choices?.[0]?.message?.content) {
+      text = data.choices[0].message.content;
+    }
+
+    if (!text) throw new Error("Empty response from Claude");
+
+    // Clean JSON block if markdown wrapping was used
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const cleanJson = jsonMatch ? jsonMatch[0] : text;
+
+    const result = JSON.parse(cleanJson) as Omit<EvaluationResult, 'timestamp'>;
+    return {
+      ...result,
+      timestamp: Date.now(),
+      factCheckReport: factCheckData?.text,
+      factCheckSources: factCheckData?.sources
+    };
+  }
+
+  throw new Error("Selected LLM provider is unsupported.");
 };
 
+/**
+ * Generates Eiffel Tower history dialog sample from preferred provider
+ */
 export const generateSampleConversation = async (): Promise<Conversation> => {
+  const config = getLLMConfig();
+  const basePrompt = "Generate a sample multi-turn conversation JSON between a user asking about the history of the Eiffel Tower and a helpful AI. The JSON should be a flat array of message objects, each containing exactly 'role' (either 'user' or 'model') and 'content'. Make it about 4 turns long.";
+
+  // 1. GEMINI SAMPLE GENERATION
+  if (config.provider === 'gemini') {
     const response = await getAI().models.generateContent({
-        model: "gemini-3.5-flash",
-        contents: "Generate a sample multi-turn conversation JSON between a user asking about the history of the Eiffel Tower and a helpful AI. The JSON should be an array of objects with 'role' (user/model) and 'content'. Make it about 4 turns long.",
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: Type.ARRAY,
-                items: {
-                    type: Type.OBJECT,
-                    properties: {
-                        role: { type: Type.STRING },
-                        content: { type: Type.STRING }
-                    }
-                }
-            }
+      model: config.geminiModel || "gemini-3.5-flash",
+      contents: basePrompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              role: { type: Type.STRING },
+              content: { type: Type.STRING }
+            },
+            required: ["role", "content"]
+          }
         }
+      }
     });
 
     const messagesRaw = JSON.parse(response.text || "[]");
-    
     const messages = messagesRaw.map((m: any, idx: number) => ({
-        id: `msg-${Date.now()}-${idx}`,
-        role: m.role === 'model' ? Role.MODEL : Role.USER,
-        content: m.content,
-        comments: []
+      id: `msg-${Date.now()}-${idx}`,
+      role: m.role === 'model' || m.role === 'assistant' ? Role.MODEL : Role.USER,
+      content: m.content || "",
+      comments: []
     }));
 
     return {
-        id: `conv-${Date.now()}`,
-        title: "Eiffel History Check",
-        messages,
-        createdAt: Date.now(),
-        domainContext: "The Eiffel Tower was constructed in 1887-1889 as the entrance to the 1889 World's Fair. It is named after engineer Gustave Eiffel.",
-        referenceContext: "Model should mention 1889 World's Fair, Gustave Eiffel, and the initial criticism from artists."
+      id: `conv-${Date.now()}`,
+      title: "Eiffel History Check",
+      messages,
+      createdAt: Date.now(),
+      domainContext: "The Eiffel Tower was constructed in 1887-1889 as the entrance to the 1889 World's Fair. It is named after engineer Gustave Eiffel.",
+      referenceContext: "Model should mention 1889 World's Fair, Gustave Eiffel, and the initial criticism from artists."
     };
+  }
+
+  // 2. OPENAI SAMPLE GENERATION
+  if (config.provider === 'openai') {
+    if (!config.openaiKey) {
+      throw new Error("OpenAI API Key is required to generate samples. Configure OpenAI in Settings or select Gemini.");
+    }
+    const endpoint = config.openaiBaseUrl 
+      ? `${config.openaiBaseUrl.replace(/\/$/, '')}/chat/completions` 
+      : 'https://api.openai.com/v1/chat/completions';
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.openaiKey}`
+      },
+      body: JSON.stringify({
+        model: config.openaiModel || 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: 'You are a helpful data generator. Always output valid JSON only.' },
+          { role: 'user', content: `${basePrompt}\n\nIMPORTANT: Return ONLY a raw JSON array matching: [{"role": "user"|"model", "content": "..."}]` }
+        ],
+        response_format: { type: "json_object" }
+      })
+    });
+
+    if (!response.ok) throw new Error(`OpenAI status ${response.status}`);
+    const data = await response.json();
+    const text = data.choices?.[0]?.message?.content;
+    if (!text) throw new Error("Empty generation response from OpenAI");
+
+    // OpenAI sometimes wraps structured array in a key or yields directly.
+    let parsed = JSON.parse(text);
+    if (!Array.isArray(parsed) && parsed.messages) {
+      parsed = parsed.messages;
+    } else if (!Array.isArray(parsed) && typeof parsed === 'object') {
+      const keys = Object.keys(parsed);
+      if (keys.length === 1 && Array.isArray(parsed[keys[0]])) {
+        parsed = parsed[keys[0]];
+      }
+    }
+
+    if (!Array.isArray(parsed)) {
+      throw new Error("OpenAI returned object instead of array.");
+    }
+
+    const messages = parsed.map((m: any, idx: number) => ({
+      id: `msg-${Date.now()}-${idx}`,
+      role: m.role === 'model' || m.role === 'assistant' || m.role === 'ai' ? Role.MODEL : Role.USER,
+      content: m.content || "",
+      comments: []
+    }));
+
+    return {
+      id: `conv-${Date.now()}`,
+      title: "Eiffel History (GPT-generated)",
+      messages,
+      createdAt: Date.now(),
+      domainContext: "The Eiffel Tower was constructed in 1887-1889 as the entrance to the 1889 World's Fair. It is named after engineer Gustave Eiffel.",
+      referenceContext: "Model should mention 1889 World's Fair, Gustave Eiffel, and the initial criticism from artists."
+    };
+  }
+
+  // 3. ANTHROPIC SAMPLE GENERATION
+  if (config.provider === 'anthropic') {
+    if (!config.anthropicKey) {
+      throw new Error("Anthropic API Key is required to generate samples. Configure Anthropic in Settings or select Gemini.");
+    }
+    const endpoint = config.anthropicBaseUrl 
+      ? `${config.anthropicBaseUrl.replace(/\/$/, '')}/messages` 
+      : 'https://api.anthropic.com/v1/messages';
+
+    const headers: Record<string, string> = {
+      'content-type': 'application/json'
+    };
+
+    const isOpenAiProxy = config.anthropicBaseUrl && (config.anthropicBaseUrl.includes('openai') || config.anthropicBaseUrl.includes('openrouter'));
+
+    if (isOpenAiProxy) {
+      headers['Authorization'] = `Bearer ${config.anthropicKey}`;
+    } else {
+      headers['X-API-Key'] = config.anthropicKey;
+      headers['anthropic-version'] = '2023-06-01';
+    }
+
+    let payload: any;
+    if (isOpenAiProxy) {
+      payload = {
+        model: config.anthropicModel || 'claude-3-5-sonnet-20241022',
+        messages: [
+          { role: 'user', content: `${basePrompt}\n\nIMPORTANT: Return ONLY a raw JSON array matching: [{"role": "user"|"model", "content": "..."}]` }
+        ],
+        response_format: { type: "json_object" }
+      };
+    } else {
+      payload = {
+        model: config.anthropicModel || 'claude-3-5-sonnet-20241022',
+        max_tokens: 2500,
+        system: "You are a helpful JSON data generator. Always output valid JSON only.",
+        messages: [
+          { role: 'user', content: `${basePrompt}\n\nIMPORTANT: Return ONLY a raw JSON array. Do not put markdown blocks unless they contain exactly the JSON array.` }
+        ]
+      };
+    }
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) throw new Error(`Claude status ${response.status}`);
+    const data = await response.json();
+    let text = "";
+    if (data.content && Array.isArray(data.content)) {
+      text = data.content[0]?.text;
+    } else if (data.choices?.[0]?.message?.content) {
+      text = data.choices[0].message.content;
+    }
+
+    if (!text) throw new Error("Empty generation response from Claude");
+
+    const jsonMatch = text.match(/\[[\s\S]*\]/) || text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error("Could not parse JSON array from Claude response");
+
+    let parsed = JSON.parse(jsonMatch[0]);
+    if (!Array.isArray(parsed) && parsed.messages) {
+      parsed = parsed.messages;
+    } else if (!Array.isArray(parsed) && typeof parsed === 'object') {
+      const keys = Object.keys(parsed);
+      if (keys.length === 1 && Array.isArray(parsed[keys[0]])) {
+        parsed = parsed[keys[0]];
+      }
+    }
+
+    if (!Array.isArray(parsed)) {
+      throw new Error("Claude returned object instead of array.");
+    }
+
+    const messages = parsed.map((m: any, idx: number) => ({
+      id: `msg-${Date.now()}-${idx}`,
+      role: m.role === 'model' || m.role === 'assistant' || m.role === 'ai' ? Role.MODEL : Role.USER,
+      content: m.content || "",
+      comments: []
+    }));
+
+    return {
+      id: `conv-${Date.now()}`,
+      title: "Eiffel History (Claude-generated)",
+      messages,
+      createdAt: Date.now(),
+      domainContext: "The Eiffel Tower was constructed in 1887-1889 as the entrance to the 1889 World's Fair. It is named after engineer Gustave Eiffel.",
+      referenceContext: "Model should mention 1889 World's Fair, Gustave Eiffel, and the initial criticism from artists."
+    };
+  }
+
+  throw new Error("Unsupported LLM provider.");
 };

@@ -78,8 +78,8 @@ const App: React.FC = () => {
       setConversations(prev => [newConv, ...prev]);
       setCurrentConversation(newConv);
       setViewState('editor');
-    } catch (e) {
-      setError("Failed to generate sample conversation.");
+    } catch (e: any) {
+      setError(e?.message || "Failed to generate sample conversation.");
     } finally {
       setIsEvaluating(false);
     }
@@ -170,8 +170,8 @@ const App: React.FC = () => {
       
       const updatedConv = { ...currentConversation, evaluation: result };
       updateConversationState(updatedConv);
-    } catch (e) {
-      setError("Evaluation failed. Please check your API key and try again.");
+    } catch (e: any) {
+      setError(e?.message || "Evaluation failed. Please check your API key and try again.");
     } finally {
       setIsEvaluating(false);
     }
@@ -239,9 +239,9 @@ const App: React.FC = () => {
           <div className="flex items-center gap-3">
              <button 
                onClick={() => setViewState('settings')}
-               className={`text-sm font-medium px-3 py-2 rounded-lg transition-colors ${viewState === 'settings' ? 'bg-gray-100 text-indigo-600' : 'text-gray-600 hover:bg-gray-50'}`}
+               className={`text-sm font-semibold px-3 py-2 rounded-lg transition-colors ${viewState === 'settings' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}
              >
-               Criteria Settings
+               System Settings
              </button>
              {viewState === 'editor' && (
                <>
@@ -252,8 +252,8 @@ const App: React.FC = () => {
                  <Button variant="ghost" size="sm" onClick={() => setViewState('dashboard')}>Back to Dashboard</Button>
                </>
              )}
-             <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded hidden sm:block">
-               {process.env.API_KEY ? 'API Key Configured' : 'Missing API Key'}
+             <div className="text-xs bg-slate-100 border border-slate-200 text-slate-700 px-3 py-1.5 rounded-lg hidden sm:block font-bold select-none uppercase tracking-wide">
+               Active Engine: {localStorage.getItem('evalai_provider') || 'Gemini'}
              </div>
           </div>
         </div>
