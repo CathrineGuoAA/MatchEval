@@ -2,13 +2,32 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Conversation, EvaluationResult, Role, Criteria } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Lazy initialize to prevent startup crashes when API key is missing
+let aiInstance: GoogleGenAI | null = null;
+const getAI = (): GoogleGenAI => {
+  if (aiInstance) return aiInstance;
+  
+  const apiKey = process.env.API_KEY || (typeof window !== 'undefined' ? localStorage.getItem('evalai_api_key') : '');
+  if (!apiKey) {
+    throw new Error("Gemini API Key is missing. Please configuration GEMINI_API_KEY in your env or GitHub secrets.");
+  }
+  
+  aiInstance = new GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build'
+      }
+    }
+  });
+  return aiInstance;
+};
 
 /**
  * Step 1: Verify facts using Google Search Grounding
  */
 export const performFactCheck = async (conversation: Conversation): Promise<{ text: string, sources: Array<{uri: string, title: string}> }> => {
-  const model = "gemini-2.5-flash"; // Flash is good for fast search/retrieval
+  const model = "gemini-3.5-flash"; // Flash is good for fast search/retrieval
   
   // Extract only model claims or the full flow to check
   const transcript = conversation.messages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
@@ -25,7 +44,7 @@ export const performFactCheck = async (conversation: Conversation): Promise<{ te
   `;
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await getAI().models.generateContent({
       model,
       contents: prompt,
       config: {
@@ -69,7 +88,7 @@ export const evaluateConversation = async (
   factCheckData?: { text: string, sources: any[] }
 ): Promise<EvaluationResult> => {
   // Use Pro for complex reasoning if available, otherwise Flash
-  const model = "gemini-2.5-flash"; 
+  const model = "gemini-3.5-flash"; 
   
   const transcript = conversation.messages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
 
@@ -106,7 +125,7 @@ export const evaluateConversation = async (
   const prompt = `Evaluate the following conversation transcript:\n\n${transcript}`;
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await getAI().models.generateContent({
       model,
       contents: prompt,
       config: {
@@ -156,8 +175,8 @@ export const evaluateConversation = async (
 };
 
 export const generateSampleConversation = async (): Promise<Conversation> => {
-    const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+    const response = await getAI().models.generateContent({
+        model: "gemini-3.5-flash",
         contents: "Generate a sample multi-turn conversation JSON between a user asking about the history of the Eiffel Tower and a helpful AI. The JSON should be an array of objects with 'role' (user/model) and 'content'. Make it about 4 turns long.",
         config: {
             responseMimeType: "application/json",
