@@ -1,0 +1,6 @@
+{
+  "name": "MatchEval",
+  "description": "A comprehensive platform to evaluate, visualize, and annotate AI chatbot conversations using LLM-as-a-Judge (Gemini).",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
