@@ -125,8 +125,25 @@ export const performFactCheck = async (conversation: Conversation): Promise<{ te
         text: response.text || "No fact check analysis generated.",
         sources
       };
-    } catch (error) {
-      console.warn("Gemini Fact check failed, falling back to basic check", error);
+    } catch (error: any) {
+      console.warn("Gemini Fact check with Google Search grounding failed, falling back to basic self-check", error);
+      try {
+        const model = config.geminiModel || "gemini-3.5-flash";
+        const response = await getAI().models.generateContent({
+          model,
+          contents: prompt,
+        });
+        return {
+          text: (response.text || "No fact check analysis generated.") + "\n\n*(Note: Ran model-native self-check because Google Search grounding was unavailable with this API Key or model)*",
+          sources: []
+        };
+      } catch (fallbackError: any) {
+        console.error("Gemini basic self-check also failed", fallbackError);
+        return {
+          text: `Fact check failed: ${fallbackError?.message || fallbackError || "Unknown error"}. Please check if your Gemini API key is configured correctly in System Settings.`,
+          sources: []
+        };
+      }
     }
   }
 
@@ -159,9 +176,9 @@ export const performFactCheck = async (conversation: Conversation): Promise<{ te
       const data = await response.json();
       const text = data.choices?.[0]?.message?.content || "No analysis provided.";
       return { text, sources: [] };
-    } catch (e) {
+    } catch (e: any) {
       console.error("OpenAI Fact check failed", e);
-      return { text: "OpenAI Fact check could not be completed.", sources: [] };
+      return { text: `OpenAI Fact check failed: ${e?.message || e || "Unknown error"}. Please check your OpenAI configuration in System Settings.`, sources: [] };
     }
   }
 
@@ -220,9 +237,9 @@ export const performFactCheck = async (conversation: Conversation): Promise<{ te
         text = data.choices[0].message.content;
       }
       return { text, sources: [] };
-    } catch (e) {
+    } catch (e: any) {
       console.error("Anthropic Fact check failed", e);
-      return { text: "Anthropic Fact check could not be completed.", sources: [] };
+      return { text: `Anthropic Fact check failed: ${e?.message || e || "Unknown error"}. Please check your Anthropic configuration in System Settings.`, sources: [] };
     }
   }
 
