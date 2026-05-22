@@ -35,19 +35,39 @@ export const getLLMConfig = (): LLMConfig => {
     };
   }
 
-  // Backwards compatibility with previous key 'evalai_api_key'
-  const fallbackGeminiKey = localStorage.getItem('evalai_api_key') || '';
+  // For absolute privacy protection (Privacy-by-Design), migrate key data from localStorage to sessionStorage and clear it from localStorage
+  if (localStorage.getItem('evalai_api_key') || localStorage.getItem('evalai_gemini_api_key') || localStorage.getItem('evalai_openai_api_key') || localStorage.getItem('evalai_anthropic_api_key')) {
+    if (localStorage.getItem('evalai_api_key') && !sessionStorage.getItem('evalai_api_key')) {
+      sessionStorage.setItem('evalai_api_key', localStorage.getItem('evalai_api_key') || '');
+    }
+    if (localStorage.getItem('evalai_gemini_api_key') && !sessionStorage.getItem('evalai_gemini_api_key')) {
+      sessionStorage.setItem('evalai_gemini_api_key', localStorage.getItem('evalai_gemini_api_key') || '');
+    }
+    if (localStorage.getItem('evalai_openai_api_key') && !sessionStorage.getItem('evalai_openai_api_key')) {
+      sessionStorage.setItem('evalai_openai_api_key', localStorage.getItem('evalai_openai_api_key') || '');
+    }
+    if (localStorage.getItem('evalai_anthropic_api_key') && !sessionStorage.getItem('evalai_anthropic_api_key')) {
+      sessionStorage.setItem('evalai_anthropic_api_key', localStorage.getItem('evalai_anthropic_api_key') || '');
+    }
+    localStorage.removeItem('evalai_api_key');
+    localStorage.removeItem('evalai_gemini_api_key');
+    localStorage.removeItem('evalai_openai_api_key');
+    localStorage.removeItem('evalai_anthropic_api_key');
+  }
+
+  // Backwards compatibility with previous key 'evalai_api_key' in sessionStorage
+  const fallbackGeminiKey = sessionStorage.getItem('evalai_api_key') || '';
   const storedTemp = localStorage.getItem('evalai_temperature');
   
   return {
     provider: (localStorage.getItem('evalai_provider') as any) || 'gemini',
-    geminiKey: localStorage.getItem('evalai_gemini_api_key') || fallbackGeminiKey || process.env.API_KEY || process.env.GEMINI_API_KEY || '',
+    geminiKey: sessionStorage.getItem('evalai_gemini_api_key') || fallbackGeminiKey || '',
     geminiModel: localStorage.getItem('evalai_gemini_model') || 'gemini-3.5-flash',
     geminiBaseUrl: localStorage.getItem('evalai_gemini_base_url') || '',
-    openaiKey: localStorage.getItem('evalai_openai_api_key') || '',
+    openaiKey: sessionStorage.getItem('evalai_openai_api_key') || '',
     openaiModel: localStorage.getItem('evalai_openai_model') || 'gpt-4o-mini',
     openaiBaseUrl: localStorage.getItem('evalai_openai_base_url') || '',
-    anthropicKey: localStorage.getItem('evalai_anthropic_api_key') || '',
+    anthropicKey: sessionStorage.getItem('evalai_anthropic_api_key') || '',
     anthropicModel: localStorage.getItem('evalai_anthropic_model') || 'claude-3-5-sonnet-20241022',
     anthropicBaseUrl: localStorage.getItem('evalai_anthropic_base_url') || '',
     temperature: storedTemp !== null ? parseFloat(storedTemp) : 0,

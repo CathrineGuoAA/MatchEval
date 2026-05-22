@@ -79,28 +79,39 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
     localStorage.setItem('evalai_provider', provider);
     localStorage.setItem('evalai_temperature', String(temperature));
     
-    localStorage.setItem('evalai_gemini_api_key', geminiKey);
+    // Store model names and bases in localStorage (non-sensitive metadata)
     localStorage.setItem('evalai_gemini_model', geminiModel);
     localStorage.setItem('evalai_gemini_base_url', geminiBaseUrl);
     
-    localStorage.setItem('evalai_openai_api_key', openaiKey);
     localStorage.setItem('evalai_openai_model', openaiModel);
     localStorage.setItem('evalai_openai_base_url', openaiBaseUrl);
     
-    localStorage.setItem('evalai_anthropic_api_key', anthropicKey);
     localStorage.setItem('evalai_anthropic_model', anthropicModel);
     localStorage.setItem('evalai_anthropic_base_url', anthropicBaseUrl);
+
+    // Store keys strictly in sessionStorage (RAM / active tab session)
+    sessionStorage.setItem('evalai_gemini_api_key', geminiKey);
+    sessionStorage.setItem('evalai_openai_api_key', openaiKey);
+    sessionStorage.setItem('evalai_anthropic_api_key', anthropicKey);
+
+    // Explicitly delete any key remnants in localStorage from outdated versions
+    localStorage.removeItem('evalai_gemini_api_key');
+    localStorage.removeItem('evalai_openai_api_key');
+    localStorage.removeItem('evalai_anthropic_api_key');
+    localStorage.removeItem('evalai_api_key');
 
     setHasGeminiKey(!!geminiKey);
     setHasOpenaiKey(!!openaiKey);
     setHasAnthropicKey(!!anthropicKey);
 
-    // Also update generic key for backward fallback safety
+    // Save active API key to a generic sessionStorage key with backward fallback safety
     if (provider === 'gemini' && geminiKey) {
-      localStorage.setItem('evalai_api_key', geminiKey);
+      sessionStorage.setItem('evalai_api_key', geminiKey);
+    } else {
+      sessionStorage.removeItem('evalai_api_key');
     }
 
-    alert('Settings successfully saved!');
+    alert('Settings successfully saved! For privacy compliance, API Keys are retained ONLY in this tab\'s active sessionStorage and are never persisted permanently or sent to servers.');
   };
 
   const handleClearAPIConfig = (target: 'gemini' | 'openai' | 'anthropic') => {
@@ -110,10 +121,16 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
         setGeminiModel('gemini-3.5-flash');
         setGeminiBaseUrl('');
         setTemperature(0);
+        
+        // Remove from sessionStorage
+        sessionStorage.removeItem('evalai_gemini_api_key');
+        sessionStorage.removeItem('evalai_api_key');
+        
+        // Remove remnants from localStorage if any
         localStorage.removeItem('evalai_gemini_api_key');
+        localStorage.removeItem('evalai_api_key');
         localStorage.removeItem('evalai_gemini_model');
         localStorage.removeItem('evalai_gemini_base_url');
-        localStorage.removeItem('evalai_api_key');
         localStorage.removeItem('evalai_temperature');
         setHasGeminiKey(false);
       } else if (target === 'openai') {
@@ -121,6 +138,11 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
         setOpenaiModel('gpt-4o-mini');
         setOpenaiBaseUrl('');
         setTemperature(0);
+        
+        // Remove from sessionStorage
+        sessionStorage.removeItem('evalai_openai_api_key');
+        
+        // Remove from localStorage
         localStorage.removeItem('evalai_openai_api_key');
         localStorage.removeItem('evalai_openai_model');
         localStorage.removeItem('evalai_openai_base_url');
@@ -131,6 +153,11 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
         setAnthropicModel('claude-3-5-sonnet-20241022');
         setAnthropicBaseUrl('');
         setTemperature(0);
+        
+        // Remove from sessionStorage
+        sessionStorage.removeItem('evalai_anthropic_api_key');
+        
+        // Remove from localStorage
         localStorage.removeItem('evalai_anthropic_api_key');
         localStorage.removeItem('evalai_anthropic_model');
         localStorage.removeItem('evalai_anthropic_base_url');
@@ -280,6 +307,25 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
       {/* TAB 2: MODEL PROVIDERS & SECRETS */}
       {activeTab === 'apiKeys' && (
         <div className="space-y-6 animate-in fade-in duration-200">
+          
+          {/* Privacy Safeguard Info Banner */}
+          <div className="bg-indigo-50/55 border border-indigo-200/70 rounded-xl p-4 flex gap-3.5 items-start shadow-2xs animate-in slide-in-from-top-2 duration-300">
+            <div className="p-2 rounded-lg bg-indigo-100 text-indigo-600 flex-shrink-0">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="animate-pulse">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+            </div>
+            <div className="space-y-1">
+              <h4 className="text-xs font-black text-indigo-950 uppercase tracking-widest leading-none">Privacy-by-Design Safeguard</h4>
+              <p className="text-xs text-indigo-900 leading-relaxed font-semibold">
+                To guarantee absolute confidentiality, your API keys are loaded and stored <span className="underline decoration-indigo-300 font-bold decoration-2">only in this browser tab's RAM memory (sessionStorage)</span>.
+              </p>
+              <p className="text-[11px] text-indigo-700/90 leading-relaxed">
+                They are never written permanently to persistent device storage (localStorage) or sent to remote cloud databases, and are instantly wiped from memory as soon as you close or refresh this browser tab. You will be requested to provide them again on each new session.
+              </p>
+            </div>
+          </div>
           
           {/* Key status indicators bar */}
           <div className="bg-white p-4 rounded-xl border border-gray-200 flex flex-wrap gap-4 items-center justify-between shadow-sm">

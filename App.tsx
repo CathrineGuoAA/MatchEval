@@ -52,10 +52,10 @@ const App: React.FC = () => {
   };
 
   const checkKeys = () => {
-    const fallbackGeminiKey = localStorage.getItem('evalai_api_key') || '';
-    const geminiKey = localStorage.getItem('evalai_gemini_api_key') || fallbackGeminiKey;
-    const openaiKey = localStorage.getItem('evalai_openai_api_key') || '';
-    const anthropicKey = localStorage.getItem('evalai_anthropic_api_key') || '';
+    const fallbackGeminiKey = sessionStorage.getItem('evalai_api_key') || '';
+    const geminiKey = sessionStorage.getItem('evalai_gemini_api_key') || fallbackGeminiKey;
+    const openaiKey = sessionStorage.getItem('evalai_openai_api_key') || '';
+    const anthropicKey = sessionStorage.getItem('evalai_anthropic_api_key') || '';
     
     setHasProviderKey({
       gemini: !!geminiKey,
@@ -68,11 +68,11 @@ const App: React.FC = () => {
   const handleProviderChange = (provider: 'gemini' | 'openai' | 'anthropic') => {
     setActiveProvider(provider);
     localStorage.setItem('evalai_provider', provider);
-    // Backward fallback safety for active key
+    // Backward fallback safety for active key using sessionStorage
     if (provider === 'gemini') {
-      const geminiKey = localStorage.getItem('evalai_gemini_api_key') || localStorage.getItem('evalai_api_key') || '';
+      const geminiKey = sessionStorage.getItem('evalai_gemini_api_key') || sessionStorage.getItem('evalai_api_key') || '';
       if (geminiKey) {
-        localStorage.setItem('evalai_api_key', geminiKey);
+        sessionStorage.setItem('evalai_api_key', geminiKey);
       }
     }
   };
