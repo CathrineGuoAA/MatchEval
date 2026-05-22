@@ -799,6 +799,8 @@ Classification Priority Hierarchy:
 If multiple classes apply, prioritize according to this hierarchy:
 Sensitive > Multilingual > Edge Case > Normal (e.g. if the user switched languages but also shares personal info, classify it as "Sensitive").
 
+Exception: If the user's messages contain gibberish, random characters, or completely incomprehensible content, classify as Edge Case — even if language switching is present.
+
 Conversation Transcript:
 ${transcript}
 

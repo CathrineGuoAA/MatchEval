@@ -17,7 +17,7 @@ const DEFAULT_CRITERIA: Criteria[] = [
   { id: 'c3', name: 'Accuracy', description: "Whether verifiable facts, steps and figures are correct." },
   { id: 'c4', name: 'Understandable Language', description: "How concise, well-structured and easy to understand the wording is." },
   { id: 'c5', name: 'Completeness / Match', description: "Whether it covers the essential needs and gives a concrete next step (e.g., contact/location/time/materials, ≥2 elements)." },
-  { id: 'c6', name: 'Helpfulness / Task Progress', description: "Whether the AI meaningfully moved the user closer to their goal. A response that only asks for clarification without offering any value, or loops without progress, should score low regardless of accuracy." }
+  { id: 'c6', name: 'Helpfulness / Task Progress', description: "Whether the AI meaningfully moved the user closer to their goal. If the AI ONLY asked for clarification without offering any partial answer, suggestion, or alternative value, score 2–3 at most. Repeated clarification loops with no progress should score 1–2." }
 ];
 
 const App: React.FC = () => {
@@ -92,10 +92,11 @@ const App: React.FC = () => {
     if (storedCriteria) {
       try {
         const parsed = JSON.parse(storedCriteria);
-        // If it contains old metrics or lacks our new "Helpfulness / Task Progress" metric, migrate automatically
+        // If it contains old metrics or lacks our new "Helpfulness / Task Progress" metric or its description, migrate automatically
         const isOldDefault = Array.isArray(parsed) && (
           parsed.some(c => c.name === 'Helpfulness' || c.name === 'Coherence') ||
-          !parsed.some(c => c.id === 'c6' || c.name.includes('Helpfulness / Task Progress'))
+          !parsed.some(c => c.id === 'c6' || c.name.includes('Helpfulness / Task Progress')) ||
+          parsed.some(c => c.id === 'c6' && !c.description.includes('score 2–3 at most'))
         );
         if (isOldDefault) {
           setCriteria(DEFAULT_CRITERIA);
