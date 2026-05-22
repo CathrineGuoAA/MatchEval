@@ -172,7 +172,22 @@ export const performFactCheck = async (conversation: Conversation): Promise<{ te
         })
       });
 
-      if (!response.ok) throw new Error(`OpenAI status ${response.status}`);
+      if (!response.ok) {
+        let errSnippet = `OpenAI status ${response.status}`;
+        try {
+          const errText = await response.text();
+          const parsed = JSON.parse(errText);
+          if (parsed.error?.message) {
+            errSnippet += `: ${parsed.error.message}`;
+          } else {
+            errSnippet += `: ${errText}`;
+          }
+        } catch (_) {}
+        if (response.status === 401) {
+          errSnippet += " (Please check that your character-exact OpenAI API Key is valid and correctly configured under Settings -> API Settings)";
+        }
+        throw new Error(errSnippet);
+      }
       const data = await response.json();
       const text = data.choices?.[0]?.message?.content || "No analysis provided.";
       return { text, sources: [] };
@@ -244,6 +259,31 @@ export const performFactCheck = async (conversation: Conversation): Promise<{ te
   }
 
   return { text: "Fact check could not be completed.", sources: [] };
+};
+
+/**
+ * Normalizes evaluation results to ensure consistent and safe structure.
+ * Robustly addresses differences in LLM outputs (such as suggestedImprovements returning as an Array).
+ */
+const normalizeResult = (raw: any, factCheckData?: { text: string, sources: any[] }): Omit<EvaluationResult, 'timestamp'> => {
+  let suggested = raw.suggestedImprovements;
+  if (Array.isArray(suggested)) {
+    suggested = suggested.join('\n');
+  } else if (suggested && typeof suggested !== 'string') {
+    suggested = String(suggested);
+  }
+  return {
+    overallScore: typeof raw.overallScore === 'number' ? raw.overallScore : parseFloat(raw.overallScore) || 0,
+    summary: String(raw.summary || ""),
+    metrics: Array.isArray(raw.metrics) ? raw.metrics.map((m: any) => ({
+      name: String(m.name || ""),
+      score: typeof m.score === 'number' ? m.score : parseInt(m.score) || 0,
+      reasoning: String(m.reasoning || "")
+    })) : [],
+    suggestedImprovements: suggested || "",
+    factCheckReport: factCheckData?.text,
+    factCheckSources: factCheckData?.sources
+  };
 };
 
 /**
@@ -352,12 +392,10 @@ Return ONLY a single valid JSON object. No markdown, no text outside the JSON.
     });
 
     if (response.text) {
-      const result = JSON.parse(response.text) as Omit<EvaluationResult, 'timestamp'>;
+      const result = JSON.parse(response.text);
       return {
-        ...result,
-        timestamp: Date.now(),
-        factCheckReport: factCheckData?.text,
-        factCheckSources: factCheckData?.sources
+        ...normalizeResult(result, factCheckData),
+        timestamp: Date.now()
       };
     }
     throw new Error("No response text from Gemini");
@@ -397,12 +435,10 @@ Return ONLY a single valid JSON object. No markdown, no text outside the JSON.
     const text = data.choices?.[0]?.message?.content;
     if (!text) throw new Error("Empty response from OpenAI");
 
-    const result = JSON.parse(text) as Omit<EvaluationResult, 'timestamp'>;
+    const result = JSON.parse(text);
     return {
-      ...result,
-      timestamp: Date.now(),
-      factCheckReport: factCheckData?.text,
-      factCheckSources: factCheckData?.sources
+      ...normalizeResult(result, factCheckData),
+      timestamp: Date.now()
     };
   }
 
@@ -474,12 +510,10 @@ Return ONLY a single valid JSON object. No markdown, no text outside the JSON.
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     const cleanJson = jsonMatch ? jsonMatch[0] : text;
 
-    const result = JSON.parse(cleanJson) as Omit<EvaluationResult, 'timestamp'>;
+    const result = JSON.parse(cleanJson);
     return {
-      ...result,
-      timestamp: Date.now(),
-      factCheckReport: factCheckData?.text,
-      factCheckSources: factCheckData?.sources
+      ...normalizeResult(result, factCheckData),
+      timestamp: Date.now()
     };
   }
 

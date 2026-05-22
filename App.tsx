@@ -189,73 +189,110 @@ const App: React.FC = () => {
     } else if (fileName.endsWith('.txt')) {
       // Parse txt
       const lines = textContent.split('\n');
-      const userRegex = /^\[?(user|human|customer|client|sender|u|h|c)\]?\s*:\s*(.*)/i;
-      const modelRegex = /^\[?(model|assistant|ai|bot|agent|m|a)\]?\s*:\s*(.*)/i;
       
-      let hasSpeakerPrefixes = false;
+      // Helper function to detect speaker and strip timestamp/role formatting
+      const matchSpeaker = (lineStr: string): { role: Role; content: string } | null => {
+        const cleaned = lineStr.trim();
+        if (!cleaned) return null;
+
+        // 1. Strip timestamp at start if any
+        const tsRegex = /^(?:[\[\(]?\d{4}[-\/\.]\d{2}[-\/\.]\d{2}[\s,T_]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?[\]\)]?|[\[\(]?\d{2}:\d{2}(?::\d{2})?[\]\)]?)\s*/i;
+        const withoutTs = cleaned.replace(tsRegex, '').trim();
+
+        // 2. Check full words with optional colon (e.g., "USER: hello", "[USER] hello", "USER hello")
+        const wordPattern = /^[\[\(]?(user|human|customer|client|sender|buyer|gebruiker|caller|model|assistant|ai|bot|agent|helper|system)[\]\)]?\s*(?::|-|=)?\s*(.*)$/i;
+        const wordMatch = withoutTs.match(wordPattern);
+        if (wordMatch) {
+          const roleWord = wordMatch[1].toLowerCase();
+          const isUser = ['user', 'human', 'customer', 'client', 'sender', 'buyer', 'gebruiker', 'caller'].includes(roleWord);
+          const isModel = ['model', 'assistant', 'ai', 'bot', 'agent', 'helper'].includes(roleWord);
+          
+          const hasSeparator = withoutTs.includes(':') || withoutTs.includes('-') || withoutTs.includes('=') || withoutTs.startsWith('[') || withoutTs.startsWith('(');
+          const isStandalone = wordMatch[2].trim() === '';
+          
+          if (isUser && (hasSeparator || isStandalone || ['user', 'human', 'customer'].includes(roleWord))) {
+            return { role: Role.USER, content: wordMatch[2].trim() };
+          }
+          if (isModel && (hasSeparator || isStandalone || ['model', 'assistant', 'ai', 'bot'].includes(roleWord))) {
+            return { role: Role.MODEL, content: wordMatch[2].trim() };
+          }
+        }
+
+        // 3. Check single letters with strict colon/separator/bracket requirement (e.g., "u: hello", "[m] hello")
+        const singleLetterPattern = /^[\[\(]?(u|m|a|h|c)[\]\)]?\s*(?::|-|=)\s*(.*)$/i;
+        const singleMatch = withoutTs.match(singleLetterPattern);
+        if (singleMatch) {
+          const letter = singleMatch[1].toLowerCase();
+          if (['u', 'h', 'c'].includes(letter)) {
+            return { role: Role.USER, content: singleMatch[2].trim() };
+          }
+          if (['m', 'a'].includes(letter)) {
+            return { role: Role.MODEL, content: singleMatch[2].trim() };
+          }
+        }
+
+        return null;
+      };
+
+      // 1. Scan the file first to check if there are any speaker headers
+      let hasSpeakerHeaders = false;
       for (const line of lines) {
-        if (userRegex.test(line.trim()) || modelRegex.test(line.trim())) {
-          hasSpeakerPrefixes = true;
+        if (matchSpeaker(line)) {
+          hasSpeakerHeaders = true;
           break;
         }
       }
 
       const parsedMessages: Message[] = [];
-      
-      if (hasSpeakerPrefixes) {
+
+      if (hasSpeakerHeaders) {
         let currentRole: Role | null = null;
-        let currentText: string[] = [];
+        let currentTextLines: string[] = [];
         let counter = 0;
 
         for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
-
-          const userMatch = trimmed.match(userRegex);
-          const modelMatch = trimmed.match(modelRegex);
-
-          if (userMatch) {
-            if (currentRole && currentText.length > 0) {
+          const speaker = matchSpeaker(line);
+          if (speaker) {
+            // Push accumulated text of the previous block
+            if (currentRole && currentTextLines.length > 0) {
               parsedMessages.push({
                 id: `msg-${Date.now()}-${counter++}`,
                 role: currentRole,
-                content: currentText.join('\n').trim(),
+                content: currentTextLines.join('\n').trim(),
                 comments: []
               });
             }
-            currentRole = Role.USER;
-            currentText = [userMatch[2]];
-          } else if (modelMatch) {
-            if (currentRole && currentText.length > 0) {
-              parsedMessages.push({
-                id: `msg-${Date.now()}-${counter++}`,
-                role: currentRole,
-                content: currentText.join('\n').trim(),
-                comments: []
-              });
-            }
-            currentRole = Role.MODEL;
-            currentText = [modelMatch[2]];
+            currentRole = speaker.role;
+            currentTextLines = speaker.content ? [speaker.content] : [];
           } else {
-            if (currentRole) {
-              currentText.push(trimmed);
-            } else {
-              currentRole = Role.USER;
-              currentText = [trimmed];
+            const trimmedLine = line.trim();
+            if (trimmedLine) {
+              if (currentRole) {
+                currentTextLines.push(line);
+              } else {
+                currentRole = Role.USER;
+                currentTextLines.push(line);
+              }
+            } else if (currentTextLines.length > 0) {
+              currentTextLines.push('');
             }
           }
         }
 
-        if (currentRole && currentText.length > 0) {
-          parsedMessages.push({
-            id: `msg-${Date.now()}-${counter++}`,
-            role: currentRole,
-            content: currentText.join('\n').trim(),
-            comments: []
-          });
+        // Push final message block
+        if (currentRole && currentTextLines.length > 0) {
+          const finalContent = currentTextLines.join('\n').trim();
+          if (finalContent) {
+            parsedMessages.push({
+              id: `msg-${Date.now()}-${counter++}`,
+              role: currentRole,
+              content: finalContent,
+              comments: []
+            });
+          }
         }
       } else {
-        // Fallback: alternate blocks or lines
+        // Fallback: alternate blocks or lines when no speaker headers exist
         let blocks = textContent.split(/\n\n+/).map(b => b.trim()).filter(Boolean);
         if (blocks.length <= 1) {
           blocks = lines.map(l => l.trim()).filter(Boolean);
@@ -786,21 +823,32 @@ const App: React.FC = () => {
                                    Suggestions for Improvement
                                 </h4>
                                 <div className="text-sm text-indigo-800 leading-relaxed space-y-1">
-                                    {currentConversation.evaluation.suggestedImprovements.split('\n').filter(l => l.trim()).map((line, idx) => {
-                                        // Detect markdown bullets or dashes at start
-                                        const isBullet = /^[\*\-•]\s?/.test(line.trim());
-                                        // Clean text
-                                        const content = line.replace(/^[\*\-•]\s*/, '').trim();
-                                        
-                                        return (
-                                            <div key={idx} className={`flex gap-2 ${isBullet ? 'pl-1' : ''}`}>
-                                                {isBullet && (
-                                                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-400 flex-shrink-0 opacity-70" />
-                                                )}
-                                                <span>{content}</span>
-                                            </div>
-                                        );
-                                    })}
+                                    {(() => {
+                                        const raw = currentConversation.evaluation.suggestedImprovements;
+                                        let lines: string[] = [];
+                                        if (Array.isArray(raw)) {
+                                            lines = raw.map(item => String(item));
+                                        } else if (typeof raw === 'string') {
+                                            lines = raw.split('\n');
+                                        } else if (raw) {
+                                            lines = [String(raw)];
+                                        }
+                                        return lines.filter(l => l.trim()).map((line, idx) => {
+                                            // Detect markdown bullets or dashes at start
+                                            const isBullet = /^[\*\-•]\s?/.test(line.trim());
+                                            // Clean text
+                                            const content = line.replace(/^[\*\-•]\s*/, '').trim();
+                                            
+                                            return (
+                                                <div key={idx} className={`flex gap-2 ${isBullet ? 'pl-1' : ''}`}>
+                                                    {isBullet && (
+                                                        <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-400 flex-shrink-0 opacity-70" />
+                                                    )}
+                                                    <span>{content}</span>
+                                                </div>
+                                            );
+                                        });
+                                    })()}
                                 </div>
                             </div>
                         )}
