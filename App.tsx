@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Conversation, EvaluationResult, ViewState, Message, Role, Comment, Criteria, ConversationCategory } from './types';
-import { evaluateConversation, generateSampleConversation, performFactCheck, classifyConversation } from './services/geminiService';
+import { evaluateConversation, generateSampleConversation, performFactCheck, classifyConversation, getLLMConfig } from './services/geminiService';
 import { ScoreRadar } from './components/ScoreRadar';
 import { ChatInterface } from './components/ChatInterface';
 import { CriteriaSettings } from './components/CriteriaSettings';
@@ -154,6 +154,29 @@ const App: React.FC = () => {
       setError(e?.message || "Failed to generate sample conversation.");
     } finally {
       setIsEvaluating(false);
+    }
+  };
+
+  const handleSelectConversation = async (conv: Conversation) => {
+    setCurrentConversation(conv);
+    setViewState('editor');
+    
+    // Automatically classify on-the-fly in the background if it was uncategorized or missing category and we have key access
+    if (!conv.category || conv.category === 'Uncategorized') {
+      try {
+        const config = getLLMConfig();
+        const hasKey = config.provider === 'gemini' ? !!config.geminiKey :
+                       config.provider === 'openai' ? !!config.openaiKey :
+                       config.provider === 'anthropic' ? !!config.anthropicKey : false;
+        
+        if (hasKey) {
+          const category = await classifyConversation(conv);
+          setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, category } : c));
+          setCurrentConversation(prev => prev && prev.id === conv.id ? { ...prev, category } : prev);
+        }
+      } catch (e) {
+        console.warn("Auto-classification backfill failed", e);
+      }
     }
   };
 
@@ -921,7 +944,7 @@ const App: React.FC = () => {
                   .map(conv => (
                    <div 
                      key={conv.id} 
-                     onClick={() => { setCurrentConversation(conv); setViewState('editor'); }}
+                     onClick={() => handleSelectConversation(conv)}
                      className={`group bg-white rounded-xl border p-6 hover:shadow-lg transition-all cursor-pointer relative ${selectedIds.includes(conv.id) ? 'border-indigo-500 ring-2 ring-indigo-500/10 bg-indigo-50/5' : 'border-gray-200'}`}
                    >
                      <div className="flex justify-between items-start mb-4 gap-2">
@@ -1007,7 +1030,26 @@ const App: React.FC = () => {
                        currentConversation.category === 'Sensitive'   ? 'bg-rose-50 text-rose-700 border-rose-200' :
                                                                          'bg-slate-50 text-slate-600 border-slate-200'
                      }`}>
-                       {currentConversation.category || 'Uncategorized'}
+                       <div className="flex items-center gap-1.5 select-none py-0.5">
+                         <span>Judge: {currentConversation.category || 'Uncategorized'}</span>
+                         <span className="opacity-40">|</span>
+                         <span className="text-[9px] uppercase tracking-wider opacity-95 text-xs">Correction:</span>
+                         <select
+                           value={currentConversation.category || 'Uncategorized'}
+                           onChange={(e) => {
+                             const newCat = e.target.value as ConversationCategory;
+                             setConversations(prev => prev.map(c => c.id === currentConversation.id ? { ...c, category: newCat } : c));
+                             setCurrentConversation(prev => prev ? { ...prev, category: newCat } : null);
+                           }}
+                           className="bg-transparent border-none text-[10px] font-bold text-current p-0 focus:ring-0 focus:outline-none cursor-pointer pr-1"
+                         >
+                           <option value="Uncategorized" className="text-gray-950 font-bold bg-white">Uncategorized</option>
+                           <option value="Normal" className="text-gray-950 font-bold bg-white">Normal</option>
+                           <option value="Edge Case" className="text-gray-950 font-bold bg-white">Edge Case</option>
+                           <option value="Multilingual" className="text-gray-950 font-bold bg-white">Multilingual</option>
+                           <option value="Sensitive" className="text-gray-950 font-bold bg-white">Sensitive</option>
+                         </select>
+                       </div>
                      </span>
                    </div>
                 </div>

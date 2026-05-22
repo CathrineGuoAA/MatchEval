@@ -769,25 +769,38 @@ export const generateSampleConversation = async (): Promise<Conversation> => {
 export const classifyConversation = async (conversation: Conversation): Promise<ConversationCategory> => {
   const config = getLLMConfig();
 
-  // 只取前 6 条消息，够判断类型了，省 token
+  if (!conversation.messages || conversation.messages.length === 0) {
+    return 'Edge Case';
+  }
+
+  // Coverage improvement: Slicing up to 20 messages instead of 6, truncating extremely long texts to save tokens yet retaining key signal across the whole thread
   const transcript = conversation.messages
-    .slice(0, 6)
-    .map(m => `${m.role.toUpperCase()}: ${m.content}`)
+    .slice(0, 20)
+    .map(m => {
+      const textVal = m.content || '';
+      const truncated = textVal.length > 400 ? `${textVal.slice(0, 400)}... [truncated]` : textVal;
+      return `${m.role.toUpperCase()}: ${truncated}`;
+    })
     .join('\n\n');
 
-  const prompt = `Classify the following AI conversation into exactly ONE of these four categories:
+  const prompt = `Classify the following AI assistant conversation transcript into exactly ONE of the following four primary categories:
 
-- Normal: User has a clear, coherent request. Single language throughout.
-- Edge Case: User input is gibberish, incomprehensible, extremely vague, or the conversation is too short to evaluate meaningfully.
-- Multilingual: User switches between two or more languages during the conversation.
-- Sensitive: Conversation involves sensitive domains such as finance, health, legal matters, mental health, or personal crises.
+1. "Normal": Standard coherent conversation, assistance, Q&A, general inquiries, or coding questions. The entire conversation is in a single dominant language and does not cover sensitive or high-risk topics.
+2. "Edge Case": Insufficient context, empty inputs, incomprehensible gibberish, single-word utterances (e.g. "hi"), extremely repetitive phrases, or adversarial/prompt-injection style inputs.
+3. "Multilingual": The conversation features transitions, switches, or mixtures between two or more human languages (e.g., a mix of English and Chinese, translating phrases across languages, etc.).
+4. "Sensitive": Covers delicate, high-risk, or regulated sectors. This includes: physical health advice, symptoms/medical queries, financial investments, tax questions, legal/court advice, mental health issues, personal distress, or processing of highly sensitive personally identifiable info (PII).
 
-If multiple categories apply, pick the MOST dominant one.
+Classification Priority Hierarchy:
+If multiple classes apply, prioritize according to this hierarchy:
+Sensitive > Multilingual > Edge Case > Normal (i.e. if it switched languages BUT handles a health crisis, classify it as "Sensitive").
 
-Conversation:
+Conversation Transcript:
 ${transcript}
 
-Reply with a JSON object: { "category": "<one of: Normal, Edge Case, Multilingual, Sensitive>" }`;
+Reply with a strict JSON format structure:
+{
+  "category": "Normal" | "Edge Case" | "Multilingual" | "Sensitive"
+}`;
 
   try {
     // --- GEMINI ---
