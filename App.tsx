@@ -966,15 +966,36 @@ const App: React.FC = () => {
                      </div>
                     
                      {/* Category label badge below the title line */}
-                     <div className="mb-4">
-                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
-                         conv.category === 'Normal'      ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                         conv.category === 'Edge Case'   ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                         conv.category === 'Multilingual'? 'bg-sky-50 text-sky-700 border-sky-100' :
-                         conv.category === 'Sensitive'   ? 'bg-rose-50 text-rose-700 border-rose-200' :
-                                                           'bg-slate-50 text-slate-600 border-slate-200'
+                     <div className="mb-4" onClick={(e) => e.stopPropagation()}>
+                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border cursor-default select-none transition-colors ${
+                         conv.category === 'Normal'      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100/50' :
+                         conv.category === 'Edge Case'   ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100/50' :
+                         conv.category === 'Multilingual'? 'bg-sky-50 text-sky-700 border-sky-100 hover:bg-sky-100/50' :
+                         conv.category === 'Sensitive'   ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100/50' :
+                                                           'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100/50'
                        }`}>
-                         {conv.category || 'Uncategorized'}
+                         <div className="flex items-center gap-1.5 py-0.5">
+                           <span>{conv.category || 'Uncategorized'}</span>
+                           <span className="opacity-40">|</span>
+                           <span className="text-[9px] text-xs font-normal">CORRECT:</span>
+                           <select
+                             value={conv.category || 'Uncategorized'}
+                             onChange={(e) => {
+                               const newCat = e.target.value as ConversationCategory;
+                               setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, category: newCat } : c));
+                               if (currentConversation && currentConversation.id === conv.id) {
+                                 setCurrentConversation(prev => prev ? { ...prev, category: newCat } : null);
+                               }
+                             }}
+                             className="bg-transparent border-none text-[10px] font-extrabold text-current p-0 focus:ring-0 focus:outline-none cursor-pointer pr-1 uppercase"
+                           >
+                             <option value="Uncategorized" className="text-gray-950 font-bold bg-white">Uncategorized</option>
+                             <option value="Normal" className="text-gray-950 font-bold bg-white">Normal</option>
+                             <option value="Edge Case" className="text-gray-950 font-bold bg-white">Edge Case</option>
+                             <option value="Multilingual" className="text-gray-950 font-bold bg-white">Multilingual</option>
+                             <option value="Sensitive" className="text-gray-950 font-bold bg-white">Sensitive</option>
+                           </select>
+                         </div>
                        </span>
                      </div>
                     
