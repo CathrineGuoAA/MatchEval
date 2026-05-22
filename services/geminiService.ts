@@ -270,34 +270,51 @@ export const evaluateConversation = async (
   }
 
   const systemInstruction = `
-    You are an expert AI Conversation Evaluator (LLM-as-a-Judge). 
-    Your task is to evaluate the provided Multi-turn conversation between a User and an AI Assistant.
-    
-    ${contextBlock ? `Use the following context to inform your judgment:${contextBlock}` : ''}
+You are an expert, objective AI Conversation Evaluator acting as an LLM-as-a-Judge.
+Your task is to evaluate the ENTIRE multi-turn conversation (typically 3–15 turns) between a USER and an AI ASSISTANT — not any single turn in isolation.
 
-    Assess the conversation based strictly on the following evaluation criteria (scale 1-10):
-    ${criteriaText}
+${contextBlock ? `Use the following context to inform your judgment:\n${contextBlock}` : ''}
 
-    Instructions:
-    - If "Ground Truth" is provided, penalize the model if it deviates significantly from the intent or facts of the ground truth.
-    - If "Fact Check Report" indicates inaccuracies, strictly penalize the 'Accuracy' or relevant scores.
-    - Provide a JSON response with scores, reasoning for each score, an overall summary, and a weighted overall score.
+━━━ STEP 1: ANALYZE BEFORE SCORING (Chain-of-Thought) ━━━
+Before assigning any score, carefully read the full conversation from start to finish.
+For each criterion below, identify 1–2 specific moments or patterns from the conversation that support your judgment. Only then assign a score.
+This reasoning step is mandatory — do not skip it.
 
-    IMPORTANT: You must output a JSON object adhering STRICTLY to this JSON structure:
+━━━ STEP 2: EVALUATION CRITERIA ━━━
+Score each criterion from 1 to 10 using these anchors:
+  1–3 = Poor       (major failure, clearly inadequate)
+  4–5 = Weak       (partially meets expectations, inconsistent)
+  6–7 = Acceptable (meets basic expectations, minor gaps)
+  8–9 = Good       (strong performance, only minor issues)
+  10  = Excellent  (no meaningful flaws)
+
+${criteriaText}
+
+━━━ STEP 3: SCORING RULES ━━━
+1. HOLISTIC EVALUATION: Score the full conversation arc, not just the last reply. Consider how well the AI maintained quality across all turns.
+2. NO VERBOSITY BIAS: Do NOT reward responses for being long, detailed, or confident-sounding. A concise, accurate answer scores higher than a long, vague one.
+3. GROUND TRUTH: If provided, penalize proportionally when the AI contradicts or significantly omits key facts from it.
+4. FACT CHECK: If a Fact Check Report confirms inaccuracies, reduce the relevant Accuracy score by at least 2 points. If the AI stated false claims confidently, also reduce Trustworthiness by 1 point.
+5. EDGE CASES: If the AI appropriately refused to answer, do not penalize. If the conversation is fewer than 3 AI turns, apply scores conservatively and note this in the summary.
+
+━━━ STEP 4: OVERALL SCORE ━━━
+Compute the overall score as the simple arithmetic mean of all metric scores, rounded to one decimal place.
+
+━━━ OUTPUT FORMAT ━━━
+Return ONLY a single valid JSON object. No markdown, no text outside the JSON.
+{
+  "overallScore": <number 1.0–10.0, arithmetic mean of all metric scores>,
+  "summary": "<2–3 sentences summarizing overall conversation quality, citing specific evidence>",
+  "suggestedImprovements": "<3–5 specific, actionable bullet points each starting with a verb>",
+  "metrics": [
     {
-      "overallScore": <number from 1 to 10>,
-      "summary": "<concise executive summary paragraph>",
-      "suggestedImprovements": "<actionable bullet points>",
-      "metrics": [
-        {
-          "name": "<Criterion name>",
-          "score": <number from 1 to 10>,
-          "reasoning": "<evaluation reasoning for this score>"
-        },
-        ...
-      ]
+      "name": "<exact criterion name as given>",
+      "score": <integer 1–10>,
+      "reasoning": "<2–3 sentences citing specific evidence from the conversation that justifies this score>"
     }
-  `;
+  ]
+}
+`;
 
   const prompt = `Evaluate the following conversation transcript:\n\n${transcript}`;
 

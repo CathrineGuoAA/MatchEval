@@ -30,6 +30,39 @@ const App: React.FC = () => {
   // Evaluation Options
   const [enableFactCheck, setEnableFactCheck] = useState(false);
   const [showContextInputs, setShowContextInputs] = useState(false);
+  const [activeProvider, setActiveProvider] = useState<'gemini' | 'openai' | 'anthropic'>('gemini');
+  const [isDragging, setIsDragging] = useState(false);
+  const [hasProviderKey, setHasProviderKey] = useState({
+    gemini: false,
+    openai: false,
+    anthropic: false
+  });
+
+  const checkKeys = () => {
+    const fallbackGeminiKey = localStorage.getItem('evalai_api_key') || '';
+    const geminiKey = localStorage.getItem('evalai_gemini_api_key') || fallbackGeminiKey;
+    const openaiKey = localStorage.getItem('evalai_openai_api_key') || '';
+    const anthropicKey = localStorage.getItem('evalai_anthropic_api_key') || '';
+    
+    setHasProviderKey({
+      gemini: !!geminiKey,
+      openai: !!openaiKey,
+      anthropic: !!anthropicKey
+    });
+  };
+
+  // Switch dynamic provider helper
+  const handleProviderChange = (provider: 'gemini' | 'openai' | 'anthropic') => {
+    setActiveProvider(provider);
+    localStorage.setItem('evalai_provider', provider);
+    // Backward fallback safety for active key
+    if (provider === 'gemini') {
+      const geminiKey = localStorage.getItem('evalai_gemini_api_key') || localStorage.getItem('evalai_api_key') || '';
+      if (geminiKey) {
+        localStorage.setItem('evalai_api_key', geminiKey);
+      }
+    }
+  };
 
   // Load data from local storage on mount
   useEffect(() => {
@@ -60,7 +93,24 @@ const App: React.FC = () => {
     } else {
       localStorage.setItem(CRITERIA_STORAGE_KEY, JSON.stringify(DEFAULT_CRITERIA));
     }
+
+    const storedProvider = localStorage.getItem('evalai_provider') as 'gemini' | 'openai' | 'anthropic';
+    if (storedProvider) {
+      setActiveProvider(storedProvider);
+    }
+    checkKeys();
   }, []);
+
+  // Keep API key checks fresh when view shifts back from settings
+  useEffect(() => {
+    if (viewState === 'editor' || viewState === 'dashboard') {
+      checkKeys();
+      const storedProvider = localStorage.getItem('evalai_provider') as 'gemini' | 'openai' | 'anthropic';
+      if (storedProvider) {
+        setActiveProvider(storedProvider);
+      }
+    }
+  }, [viewState]);
 
   // Save to local storage on change
   useEffect(() => {
@@ -97,24 +147,17 @@ const App: React.FC = () => {
     const safeTitle = currentConversation.title.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'conversation';
     link.href = url;
     link.download = `${safeTitle}_evaluated.json`;
-    document.body.appendChild(link);
-    link.click();
-    
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const parseUploadedFile = (fileName: string, textContent: string) => {
+    let newConv: Conversation;
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
+    if (fileName.endsWith('.json')) {
       try {
-        const json = JSON.parse(e.target?.result as string);
+        const json = JSON.parse(textContent);
         
-        let newConv: Conversation;
-
         // 1. Support for importing the Full Conversation Export (with highlights, comments, evaluation)
         if (json.messages && Array.isArray(json.messages)) {
              newConv = {
@@ -128,7 +171,7 @@ const App: React.FC = () => {
         else if (Array.isArray(json)) {
             newConv = {
               id: `conv-${Date.now()}`,
-              title: file.name.replace('.json', '') || 'Uploaded Conversation',
+              title: fileName.replace('.json', '') || 'Uploaded Conversation',
               messages: json.map((m: any, idx: number) => ({
                 id: `msg-${Date.now()}-${idx}`,
                 role: m.role || Role.USER,
@@ -138,19 +181,160 @@ const App: React.FC = () => {
               createdAt: Date.now()
             };
         } else {
-             throw new Error("Unknown format");
+             throw new Error("Unknown structure");
         }
-        
-        setConversations(prev => [newConv, ...prev]);
-        setCurrentConversation(newConv);
-        setViewState('editor');
-      } catch (err) {
-        setError("Invalid JSON format. Expected a Conversation object or an Array of messages.");
+      } catch (err: any) {
+        throw new Error(err?.message || "Invalid JSON format. Expected a Conversation object or an Array of messages.");
+      }
+    } else if (fileName.endsWith('.txt')) {
+      // Parse txt
+      const lines = textContent.split('\n');
+      const userRegex = /^\[?(user|human|customer|client|sender|u|h|c)\]?\s*:\s*(.*)/i;
+      const modelRegex = /^\[?(model|assistant|ai|bot|agent|m|a)\]?\s*:\s*(.*)/i;
+      
+      let hasSpeakerPrefixes = false;
+      for (const line of lines) {
+        if (userRegex.test(line.trim()) || modelRegex.test(line.trim())) {
+          hasSpeakerPrefixes = true;
+          break;
+        }
+      }
+
+      const parsedMessages: Message[] = [];
+      
+      if (hasSpeakerPrefixes) {
+        let currentRole: Role | null = null;
+        let currentText: string[] = [];
+        let counter = 0;
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+
+          const userMatch = trimmed.match(userRegex);
+          const modelMatch = trimmed.match(modelRegex);
+
+          if (userMatch) {
+            if (currentRole && currentText.length > 0) {
+              parsedMessages.push({
+                id: `msg-${Date.now()}-${counter++}`,
+                role: currentRole,
+                content: currentText.join('\n').trim(),
+                comments: []
+              });
+            }
+            currentRole = Role.USER;
+            currentText = [userMatch[2]];
+          } else if (modelMatch) {
+            if (currentRole && currentText.length > 0) {
+              parsedMessages.push({
+                id: `msg-${Date.now()}-${counter++}`,
+                role: currentRole,
+                content: currentText.join('\n').trim(),
+                comments: []
+              });
+            }
+            currentRole = Role.MODEL;
+            currentText = [modelMatch[2]];
+          } else {
+            if (currentRole) {
+              currentText.push(trimmed);
+            } else {
+              currentRole = Role.USER;
+              currentText = [trimmed];
+            }
+          }
+        }
+
+        if (currentRole && currentText.length > 0) {
+          parsedMessages.push({
+            id: `msg-${Date.now()}-${counter++}`,
+            role: currentRole,
+            content: currentText.join('\n').trim(),
+            comments: []
+          });
+        }
+      } else {
+        // Fallback: alternate blocks or lines
+        let blocks = textContent.split(/\n\n+/).map(b => b.trim()).filter(Boolean);
+        if (blocks.length <= 1) {
+          blocks = lines.map(l => l.trim()).filter(Boolean);
+        }
+
+        blocks.forEach((block, idx) => {
+          parsedMessages.push({
+            id: `msg-${Date.now()}-${idx}`,
+            role: idx % 2 === 0 ? Role.USER : Role.MODEL,
+            content: block,
+            comments: []
+          });
+        });
+      }
+
+      if (parsedMessages.length === 0) {
+        throw new Error("The text file is empty or could not be parsed.");
+      }
+
+      newConv = {
+        id: `conv-${Date.now()}`,
+        title: fileName.replace('.txt', '') || 'Uploaded Text Conversation',
+        messages: parsedMessages,
+        createdAt: Date.now()
+      };
+    } else {
+      throw new Error("Unsupported file type. Please upload a .json or .txt file.");
+    }
+
+    setConversations(prev => [newConv, ...prev]);
+    setCurrentConversation(newConv);
+    setViewState('editor');
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        parseUploadedFile(file.name, e.target?.result as string);
+      } catch (err: any) {
+        setError(err?.message || "Parsing failed. Please check the file format.");
       }
     };
     reader.readAsText(file);
-    // Reset value so the same file can be selected again
     event.target.value = '';
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        parseUploadedFile(file.name, event.target?.result as string);
+      } catch (err: any) {
+        setError(err?.message || "Failed to parse file.");
+      }
+    };
+    reader.readAsText(file);
   };
 
   const handleEvaluate = async () => {
@@ -252,8 +436,8 @@ const App: React.FC = () => {
                  <Button variant="ghost" size="sm" onClick={() => setViewState('dashboard')}>Back to Dashboard</Button>
                </>
              )}
-             <div className="text-xs bg-slate-100 border border-slate-200 text-slate-700 px-3 py-1.5 rounded-lg hidden sm:block font-bold select-none uppercase tracking-wide">
-               Active Engine: {localStorage.getItem('evalai_provider') || 'Gemini'}
+             <div className="text-xs bg-indigo-50 border border-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg hidden sm:block font-bold select-none uppercase tracking-wide">
+               Active Engine: {activeProvider}
              </div>
           </div>
         </div>
@@ -269,26 +453,59 @@ const App: React.FC = () => {
         )}
 
         {viewState === 'dashboard' && (
-          <div className="space-y-8 animate-in fade-in duration-500">
+          <div 
+            className={`space-y-8 animate-in fade-in duration-500 rounded-2xl transition-all ${
+              isDragging ? 'bg-indigo-50/50 p-6 ring-4 ring-indigo-500/10 shadow-inner' : ''
+            }`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
                 <h2 className="text-3xl font-bold text-gray-900">Dashboard</h2>
                 <p className="text-gray-500 mt-1">Manage and evaluate your AI conversations.</p>
               </div>
               <div className="flex gap-3">
-                 <label className="cursor-pointer inline-flex items-center justify-center rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 px-4 py-2 text-sm">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                    <span>Upload JSON</span>
-                    <input type="file" className="hidden" accept=".json" onChange={handleFileUpload} />
+                 <label className="cursor-pointer inline-flex items-center justify-center rounded-lg font-bold transition-colors focus:outline-none bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 px-4 py-2 text-sm shadow-xs select-none">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-2 text-indigo-600"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                    <span>Upload JSON / TXT</span>
+                    <input type="file" className="hidden" accept=".json,.txt" onChange={handleFileUpload} />
                  </label>
                  <Button onClick={handleCreateNew} isLoading={isEvaluating}>Generate Sample</Button>
               </div>
             </div>
 
+            {/* Drag feedback card overlay when list is loaded but user drags a file */}
+            {isDragging && conversations.length > 0 && (
+              <div className="py-12 text-center bg-indigo-50/80 rounded-2xl border-2 border-dashed border-indigo-500 text-indigo-800 backdrop-blur-xs flex flex-col items-center justify-center space-y-2 animate-in zoom-in duration-200">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-bounce text-indigo-600"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                <p className="font-extrabold text-lg">Drop your JSON or TXT file to import conversation</p>
+                <p className="text-xs font-semibold text-indigo-600">Supports MatchEval exports, raw message arrays, or formatted transcripts</p>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {conversations.length === 0 ? (
-                <div className="col-span-full py-20 text-center bg-white rounded-2xl border-2 border-dashed border-gray-200">
-                    <p className="text-gray-400 text-lg">No conversations found. Upload one or generate a sample.</p>
+                <div className={`col-span-full py-20 text-center bg-white rounded-2xl border-2 border-dashed ${isDragging ? 'border-indigo-600 bg-indigo-50/20 text-indigo-700' : 'border-gray-200'} transition-all`}>
+                    <div className="flex flex-col items-center justify-center space-y-3">
+                      <div className={`p-4 rounded-full bg-indigo-50 text-indigo-600 ${isDragging ? 'scale-110 bg-indigo-100 text-indigo-800 animate-pulse' : ''} transition-all`}>
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                      </div>
+                      <p className="text-gray-900 font-extrabold text-lg">
+                        {isDragging ? 'Drop your file now!' : 'No conversations found'}
+                      </p>
+                      <p className="text-gray-500 text-sm max-w-sm px-4 leading-relaxed">
+                        Drag and drop your AI conversation logs as <strong>.json</strong> or <strong>.txt</strong> here, or upload manual transcripts to evaluate.
+                      </p>
+                      <div className="flex gap-2 pt-2">
+                        <label className="cursor-pointer inline-flex items-center justify-center rounded-lg font-bold transition-colors bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 text-sm shadow-sm select-none">
+                          Browse Files
+                          <input type="file" className="hidden" accept=".json,.txt" onChange={handleFileUpload} />
+                        </label>
+                        <Button variant="secondary" onClick={handleCreateNew} isLoading={isEvaluating}>Generate Sample</Button>
+                      </div>
+                    </div>
                 </div>
               ) : (
                 conversations.map(conv => (
@@ -400,6 +617,65 @@ const App: React.FC = () => {
                           </div>
                         )}
 
+                        {/* Interactive LLM Judge Switch */}
+                        <div className="mb-4">
+                          <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                            Active LLM Evaluation Judge
+                          </label>
+                          <div className="grid grid-cols-3 gap-1 bg-slate-50 p-1 rounded-lg border border-gray-200">
+                            <button
+                              type="button"
+                              onClick={() => handleProviderChange('gemini')}
+                              className={`py-2 px-3 rounded-md text-xs font-bold transition-all text-center ${
+                                activeProvider === 'gemini'
+                                  ? 'bg-indigo-600 text-white shadow-sm font-black'
+                                  : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
+                              }`}
+                            >
+                              Google Gemini
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleProviderChange('openai')}
+                              className={`py-2 px-3 rounded-md text-xs font-bold transition-all text-center ${
+                                activeProvider === 'openai'
+                                  ? 'bg-indigo-600 text-white shadow-sm font-black'
+                                  : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
+                              }`}
+                            >
+                              OpenAI GPT
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleProviderChange('anthropic')}
+                              className={`py-2 px-3 rounded-md text-xs font-bold transition-all text-center ${
+                                activeProvider === 'anthropic'
+                                  ? 'bg-indigo-600 text-white shadow-sm font-black'
+                                  : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
+                              }`}
+                            >
+                              Anthropic Claude
+                            </button>
+                          </div>
+                          
+                          {/* Key verification indicator for smooth user experience */}
+                          {!hasProviderKey[activeProvider] && (
+                            <div className="mt-2 text-xs bg-amber-50 text-amber-800 border border-amber-200 p-2.5 rounded-lg flex items-start gap-2.5 leading-normal animate-in fade-in slide-in-from-top-1">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="mt-0.5 flex-shrink-0 text-amber-600"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                              <div>
+                                <span className="font-bold">Missing Saved Key: </span>
+                                You haven't stored an API key for <span className="capitalize">{activeProvider}</span> yet.
+                                <button 
+                                  onClick={() => setViewState('settings')}
+                                  className="text-indigo-600 hover:underline font-bold ml-1 inline-block"
+                                >
+                                  Configure in Settings →
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
                         <div className="flex items-center gap-3 mb-4 p-3 bg-gray-50 rounded-lg border border-gray-100">
                            <input 
                              type="checkbox" 
@@ -409,8 +685,12 @@ const App: React.FC = () => {
                              className="h-4 w-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300"
                            />
                            <label htmlFor="factCheck" className="text-sm text-gray-700 cursor-pointer select-none">
-                              Enable <strong>Online Fact Checking</strong> via Google Search
-                              <span className="block text-xs text-gray-500 font-normal">Verify claims against real-time web data.</span>
+                              Enable <strong>Online Fact Checking</strong>
+                              <span className="block text-xs text-gray-500 font-normal">
+                                {activeProvider === 'gemini' 
+                                  ? 'Verify claims against real-time web data using Google Search Grounding.'
+                                  : "Verify claims against the model's internal knowledge base via self-check."}
+                              </span>
                            </label>
                         </div>
 
