@@ -35,6 +35,13 @@ const App: React.FC = () => {
   const [activeProvider, setActiveProvider] = useState<'gemini' | 'openai' | 'anthropic'>('gemini');
   const [isDragging, setIsDragging] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkEvalProgress, setBulkEvalProgress] = useState<{
+    total: number;
+    current: number;
+    running: boolean;
+    errorCount: number;
+  } | null>(null);
+  const cancelBulkRef = React.useRef(false);
   const [hasProviderKey, setHasProviderKey] = useState({
     gemini: false,
     openai: false,
@@ -371,6 +378,84 @@ const App: React.FC = () => {
       const mdContent = "# MatchEval Bulk Reports Export\n\n" + selectedConvs.map(generateMarkdownReport).join(divider);
       downloadFile(`matcheval_bulk_report_${timestamp}.md`, mdContent, 'text/markdown');
     }
+  };
+
+  const handleBulkEvaluate = async () => {
+    if (selectedIds.length === 0) return;
+
+    const currentProvider = activeProvider;
+    const hasKey = hasProviderKey[currentProvider];
+    if (!hasKey) {
+      setError(`Please set your API key for ${currentProvider.toUpperCase()} in Settings first.`);
+      return;
+    }
+
+    setBulkEvalProgress({ total: selectedIds.length, current: 0, running: true, errorCount: 0 });
+    setIsEvaluating(true);
+    setError(null);
+    cancelBulkRef.current = false;
+
+    const idsToEvaluate = [...selectedIds];
+    let completedCount = 0;
+    let failedCount = 0;
+
+    for (const id of idsToEvaluate) {
+      if (cancelBulkRef.current) break;
+
+      const conv = conversations.find(c => c.id === id);
+      if (!conv) {
+        completedCount++;
+        setBulkEvalProgress(prev => prev ? { ...prev, current: completedCount } : null);
+        continue;
+      }
+
+      try {
+        let factCheckData = undefined;
+        if (enableFactCheck) {
+          try {
+            factCheckData = await performFactCheck(conv);
+          } catch (fcErr) {
+            console.warn("Fact check failed for conversation", id, fcErr);
+          }
+        }
+
+        // Run evaluation
+        const evaluation = await evaluateConversation(conv, criteria, factCheckData);
+
+        // Also classify it
+        let category = conv.category;
+        try {
+          category = await classifyConversation(conv);
+        } catch (catErr) {
+          console.warn("Classification failed for conversation", id, catErr);
+        }
+
+        const updatedConv: Conversation = { ...conv, evaluation, category };
+
+        // Update list states
+        setConversations(prev => prev.map(c => c.id === id ? updatedConv : c));
+        
+        // Update current viewing conversation if matched
+        setCurrentConversation(curr => curr && curr.id === id ? updatedConv : curr);
+
+      } catch (err: any) {
+        console.error(`Failed to evaluate conversation ${id}:`, err);
+        failedCount++;
+      } finally {
+        completedCount++;
+        setBulkEvalProgress(prev => prev ? {
+          ...prev,
+          current: completedCount,
+          errorCount: failedCount
+        } : null);
+      }
+    }
+
+    setIsEvaluating(false);
+    // Keep the progress showing for a short moment so they can see completion, then clear
+    setTimeout(() => {
+      setBulkEvalProgress(null);
+    }, 3000);
   };
 
   const parseUploadedFile = (fileName: string, textContent: string): Conversation => {
@@ -821,6 +906,7 @@ const App: React.FC = () => {
                         }
                       }}
                       className="h-4 w-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer"
+                      disabled={bulkEvalProgress?.running}
                     />
                   </div>
                   <label htmlFor="selectAll" className="text-sm font-semibold text-gray-750 cursor-pointer">
@@ -833,34 +919,79 @@ const App: React.FC = () => {
                   )}
                 </div>
                 
-                {selectedIds.length > 0 && (
-                  <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-                    <span className="text-xs text-gray-400 self-center mr-1 font-semibold uppercase tracking-wider hidden sm:block">Export As:</span>
-                    
-                    <Button 
-                      variant="secondary" 
-                      size="sm"
-                      onClick={() => handleBulkExport('json')}
-                    >
-                      JSON Archive
-                    </Button>
-
-                    <Button 
-                      variant="secondary" 
-                      size="sm"
-                      onClick={() => handleBulkExport('txt')}
-                    >
-                      TXT Report
-                    </Button>
-
-                    <Button 
-                      variant="secondary" 
-                      size="sm"
-                      onClick={() => handleBulkExport('md')}
-                    >
-                      Markdown
-                    </Button>
+                {bulkEvalProgress && bulkEvalProgress.running ? (
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 bg-indigo-50/70 border border-indigo-150 rounded-xl py-2 px-4 w-full sm:w-auto flex-1 max-w-lg sm:ml-4 shadow-2xs">
+                    <div className="flex items-center justify-between w-full sm:w-auto md:min-w-[140px] gap-2">
+                      <div className="flex items-center gap-2">
+                        <div className="h-4 w-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                        <span className="text-xs font-extrabold text-indigo-900 tracking-tight whitespace-nowrap">
+                          Analyzing {bulkEvalProgress.current} / {bulkEvalProgress.total}
+                        </span>
+                      </div>
+                      <button 
+                        onClick={() => { cancelBulkRef.current = true; }} 
+                        className="text-[10px] text-red-650 font-black hover:underline hover:text-red-700 cursor-pointer uppercase tracking-wider ml-1 px-1.5 py-0.5 rounded-md hover:bg-red-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    {/* Progress Bar Container */}
+                    <div className="h-2 bg-indigo-100 rounded-full flex-1 min-w-[120px] overflow-hidden">
+                      <div 
+                        className="bg-indigo-600 h-full rounded-full transition-all duration-300 ease-out"
+                        style={{ width: `${(bulkEvalProgress.current / bulkEvalProgress.total) * 100}%` }}
+                      ></div>
+                    </div>
                   </div>
+                ) : (
+                  selectedIds.length > 0 && (
+                    <div className="flex flex-wrap gap-2 w-full sm:w-auto items-center justify-end">
+                      {/* One-key Analyze Button */}
+                      <Button 
+                        variant="primary" 
+                        size="sm"
+                        onClick={handleBulkEvaluate}
+                        isLoading={isEvaluating}
+                        className="bg-indigo-650 hover:bg-indigo-700 text-white font-bold flex items-center gap-1.5 shadow-sm active:scale-98 transition-all hover:shadow-md"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="animate-pulse">
+                          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                        </svg>
+                        One-Key Analyze Selected ({selectedIds.length})
+                      </Button>
+
+                      <span className="text-gray-300 self-center mx-1 font-semibold hidden sm:block">|</span>
+                      
+                      <span className="text-xs text-gray-400 self-center mr-1 font-semibold uppercase tracking-wider hidden sm:block">Export As:</span>
+                      
+                      <Button 
+                        variant="secondary" 
+                        size="sm"
+                        onClick={() => handleBulkExport('json')}
+                        disabled={isEvaluating}
+                      >
+                        JSON Archive
+                      </Button>
+
+                      <Button 
+                        variant="secondary" 
+                        size="sm"
+                        onClick={() => handleBulkExport('txt')}
+                        disabled={isEvaluating}
+                      >
+                        TXT Report
+                      </Button>
+
+                      <Button 
+                        variant="secondary" 
+                        size="sm"
+                        onClick={() => handleBulkExport('md')}
+                        disabled={isEvaluating}
+                      >
+                        Markdown
+                      </Button>
+                    </div>
+                  )
                 )}
               </div>
             )}
