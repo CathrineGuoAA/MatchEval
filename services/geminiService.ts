@@ -788,11 +788,16 @@ export const classifyConversation = async (conversation: Conversation): Promise<
 1. "Normal": Standard coherent conversation, assistance, Q&A, general inquiries, or coding questions. The entire conversation is in a single dominant language and does not cover sensitive or high-risk topics.
 2. "Edge Case": Insufficient context, empty inputs, incomprehensible gibberish, single-word utterances (e.g. "hi"), extremely repetitive phrases, or adversarial/prompt-injection style inputs.
 3. "Multilingual": The conversation features transitions, switches, or mixtures between two or more human languages (e.g., a mix of English and Chinese, translating phrases across languages, etc.).
-4. "Sensitive": Covers delicate, high-risk, or regulated sectors. This includes: physical health advice, symptoms/medical queries, financial investments, tax questions, legal/court advice, mental health issues, personal distress, or processing of highly sensitive personally identifiable info (PII).
+4. "Sensitive": The user shares personal information or the conversation is of a private nature — such as sharing their name, contact details, financial situation, health condition, family problems, or personal struggles. The key signal is the USER actively revealing personal details, not just the topic being discussed.
+
+Rules:
+- If multiple categories apply, pick the MOST dominant one.
+- "Sensitive" requires the USER to reveal personal information — asking about a topic (e.g. "where can I find financial help?") is NOT enough.
+- A conversation in multiple languages where the user also shares personal info → classify as Sensitive.
 
 Classification Priority Hierarchy:
 If multiple classes apply, prioritize according to this hierarchy:
-Sensitive > Multilingual > Edge Case > Normal (i.e. if it switched languages BUT handles a health crisis, classify it as "Sensitive").
+Sensitive > Multilingual > Edge Case > Normal (e.g. if the user switched languages but also shares personal info, classify it as "Sensitive").
 
 Conversation Transcript:
 ${transcript}
