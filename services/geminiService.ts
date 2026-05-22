@@ -22,7 +22,7 @@ export const getLLMConfig = (): LLMConfig => {
   if (typeof window === 'undefined') {
     return {
       provider: 'gemini',
-      geminiKey: process.env.API_KEY || process.env.GEMINI_API_KEY || '',
+      geminiKey: '',
       geminiModel: 'gemini-2.5-flash',
       geminiBaseUrl: '',
       openaiKey: '',
