@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { Conversation, EvaluationResult, Role, Criteria } from "../types";
+import { Conversation, EvaluationResult, Role, Criteria, ConversationCategory } from "../types";
 
 export interface LLMConfig {
   provider: 'gemini' | 'openai' | 'anthropic';
@@ -12,6 +12,7 @@ export interface LLMConfig {
   anthropicKey: string;
   anthropicModel: string;
   anthropicBaseUrl: string;
+  temperature: number;
 }
 
 /**
@@ -30,11 +31,13 @@ export const getLLMConfig = (): LLMConfig => {
       anthropicKey: '',
       anthropicModel: 'claude-3-5-sonnet-20241022',
       anthropicBaseUrl: '',
+      temperature: 0,
     };
   }
 
   // Backwards compatibility with previous key 'evalai_api_key'
   const fallbackGeminiKey = localStorage.getItem('evalai_api_key') || '';
+  const storedTemp = localStorage.getItem('evalai_temperature');
   
   return {
     provider: (localStorage.getItem('evalai_provider') as any) || 'gemini',
@@ -47,6 +50,7 @@ export const getLLMConfig = (): LLMConfig => {
     anthropicKey: localStorage.getItem('evalai_anthropic_api_key') || '',
     anthropicModel: localStorage.getItem('evalai_anthropic_model') || 'claude-3-5-sonnet-20241022',
     anthropicBaseUrl: localStorage.getItem('evalai_anthropic_base_url') || '',
+    temperature: storedTemp !== null ? parseFloat(storedTemp) : 0,
   };
 };
 
@@ -104,6 +108,7 @@ export const performFactCheck = async (conversation: Conversation): Promise<{ te
         contents: prompt,
         config: {
           tools: [{ googleSearch: {} }], // Enable real-time Google Search Grounding
+          temperature: config.temperature,
         }
       });
 
@@ -132,6 +137,9 @@ export const performFactCheck = async (conversation: Conversation): Promise<{ te
         const response = await getAI().models.generateContent({
           model,
           contents: prompt,
+          config: {
+            temperature: config.temperature,
+          }
         });
         return {
           text: (response.text || "No fact check analysis generated.") + "\n\n*(Note: Ran model-native self-check because Google Search grounding was unavailable with this API Key or model)*",
@@ -168,7 +176,8 @@ export const performFactCheck = async (conversation: Conversation): Promise<{ te
           messages: [
             { role: 'system', content: 'You are an objective Fact Verification Assistant.' },
             { role: 'user', content: prompt }
-          ]
+          ],
+          temperature: config.temperature,
         })
       });
 
@@ -224,7 +233,8 @@ export const performFactCheck = async (conversation: Conversation): Promise<{ te
           messages: [
             { role: 'system', content: 'You are an objective Fact Verification Assistant.' },
             { role: 'user', content: prompt }
-          ]
+          ],
+          temperature: config.temperature,
         };
       } else {
         payload = {
@@ -233,7 +243,8 @@ export const performFactCheck = async (conversation: Conversation): Promise<{ te
           system: 'You are an objective Fact Verification Assistant.',
           messages: [
             { role: 'user', content: prompt }
-          ]
+          ],
+          temperature: config.temperature,
         };
       }
 
@@ -367,6 +378,7 @@ Return ONLY a single valid JSON object. No markdown, no text outside the JSON.
       config: {
         systemInstruction,
         responseMimeType: "application/json",
+        temperature: config.temperature,
         responseSchema: {
           type: Type.OBJECT,
           properties: {
@@ -422,7 +434,8 @@ Return ONLY a single valid JSON object. No markdown, no text outside the JSON.
           { role: 'system', content: systemInstruction },
           { role: 'user', content: prompt }
         ],
-        response_format: { type: "json_object" }
+        response_format: { type: "json_object" },
+        temperature: config.temperature,
       })
     });
 
@@ -472,7 +485,8 @@ Return ONLY a single valid JSON object. No markdown, no text outside the JSON.
           { role: 'system', content: systemInstruction },
           { role: 'user', content: prompt }
         ],
-        response_format: { type: "json_object" }
+        response_format: { type: "json_object" },
+        temperature: config.temperature,
       };
     } else {
       payload = {
@@ -481,7 +495,8 @@ Return ONLY a single valid JSON object. No markdown, no text outside the JSON.
         system: systemInstruction,
         messages: [
           { role: 'user', content: `${prompt}\n\nPlease respond with valid JSON only.` }
-        ]
+        ],
+        temperature: config.temperature,
       };
     }
 
@@ -534,6 +549,7 @@ export const generateSampleConversation = async (): Promise<Conversation> => {
       contents: basePrompt,
       config: {
         responseMimeType: "application/json",
+        temperature: config.temperature,
         responseSchema: {
           type: Type.ARRAY,
           items: {
@@ -587,7 +603,8 @@ export const generateSampleConversation = async (): Promise<Conversation> => {
           { role: 'system', content: 'You are a helpful data generator. Always output valid JSON only.' },
           { role: 'user', content: `${basePrompt}\n\nIMPORTANT: Return ONLY a raw JSON array matching: [{"role": "user"|"model", "content": "..."}]` }
         ],
-        response_format: { type: "json_object" }
+        response_format: { type: "json_object" },
+        temperature: config.temperature,
       })
     });
 
@@ -657,7 +674,8 @@ export const generateSampleConversation = async (): Promise<Conversation> => {
         messages: [
           { role: 'user', content: `${basePrompt}\n\nIMPORTANT: Return ONLY a raw JSON array matching: [{"role": "user"|"model", "content": "..."}]` }
         ],
-        response_format: { type: "json_object" }
+        response_format: { type: "json_object" },
+        temperature: config.temperature,
       };
     } else {
       payload = {
@@ -666,7 +684,8 @@ export const generateSampleConversation = async (): Promise<Conversation> => {
         system: "You are a helpful JSON data generator. Always output valid JSON only.",
         messages: [
           { role: 'user', content: `${basePrompt}\n\nIMPORTANT: Return ONLY a raw JSON array. Do not put markdown blocks unless they contain exactly the JSON array.` }
-        ]
+        ],
+        temperature: config.temperature,
       };
     }
 
@@ -722,4 +741,110 @@ export const generateSampleConversation = async (): Promise<Conversation> => {
   }
 
   throw new Error("Unsupported LLM provider.");
+};
+
+/**
+ * 自动分类对话：Normal / Edge Case / Multilingual / Sensitive
+ */
+export const classifyConversation = async (conversation: Conversation): Promise<ConversationCategory> => {
+  const config = getLLMConfig();
+
+  // 只取前 6 条消息，够判断类型了，省 token
+  const transcript = conversation.messages
+    .slice(0, 6)
+    .map(m => `${m.role.toUpperCase()}: ${m.content}`)
+    .join('\n\n');
+
+  const prompt = `Classify the following AI conversation into exactly ONE of these four categories:
+
+- Normal: User has a clear, coherent request. Single language throughout.
+- Edge Case: User input is gibberish, incomprehensible, extremely vague, or the conversation is too short to evaluate meaningfully.
+- Multilingual: User switches between two or more languages during the conversation.
+- Sensitive: Conversation involves sensitive domains such as finance, health, legal matters, mental health, or personal crises.
+
+If multiple categories apply, pick the MOST dominant one.
+
+Conversation:
+${transcript}
+
+Reply with a JSON object: { "category": "<one of: Normal, Edge Case, Multilingual, Sensitive>" }`;
+
+  try {
+    // --- GEMINI ---
+    if (config.provider === 'gemini') {
+      const response = await getAI().models.generateContent({
+        model: config.geminiModel || 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+          temperature: 0,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              category: {
+                type: Type.STRING,
+                enum: ['Normal', 'Edge Case', 'Multilingual', 'Sensitive'],
+              },
+            },
+            required: ['category'],
+          },
+        },
+      });
+      const result = JSON.parse(response.text || '{}');
+      return (result.category as ConversationCategory) || 'Uncategorized';
+    }
+
+    // --- OPENAI ---
+    if (config.provider === 'openai' && config.openaiKey) {
+      const endpoint = config.openaiBaseUrl
+        ? `${config.openaiBaseUrl.replace(/\/$/, '')}/chat/completions`
+        : 'https://api.openai.com/v1/chat/completions';
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${config.openaiKey}`,
+        },
+        body: JSON.stringify({
+          model: config.openaiModel || 'gpt-4o-mini',
+          temperature: 0,
+          messages: [{ role: 'user', content: prompt }],
+          response_format: { type: 'json_object' },
+        }),
+      });
+      const data = await response.json();
+      const result = JSON.parse(data.choices?.[0]?.message?.content || '{}');
+      return (result.category as ConversationCategory) || 'Uncategorized';
+    }
+
+    // --- ANTHROPIC ---
+    if (config.provider === 'anthropic' && config.anthropicKey) {
+      const endpoint = config.anthropicBaseUrl
+        ? `${config.anthropicBaseUrl.replace(/\/$/, '')}/messages`
+        : 'https://api.anthropic.com/v1/messages';
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'X-API-Key': config.anthropicKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: config.anthropicModel || 'claude-3-5-sonnet-20241022',
+          max_tokens: 100,
+          temperature: 0,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      });
+      const data = await response.json();
+      const text = data.content?.[0]?.text || '{}';
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      const result = JSON.parse(jsonMatch ? jsonMatch[0] : '{}');
+      return (result.category as ConversationCategory) || 'Uncategorized';
+    }
+  } catch (e) {
+    console.warn('Classification failed, defaulting to Uncategorized', e);
+  }
+
+  return 'Uncategorized';
 };

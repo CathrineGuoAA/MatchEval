@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { Conversation, EvaluationResult, ViewState, Message, Role, Comment, Criteria } from './types';
-import { evaluateConversation, generateSampleConversation, performFactCheck } from './services/geminiService';
+import { Conversation, EvaluationResult, ViewState, Message, Role, Comment, Criteria, ConversationCategory } from './types';
+import { evaluateConversation, generateSampleConversation, performFactCheck, classifyConversation } from './services/geminiService';
 import { ScoreRadar } from './components/ScoreRadar';
 import { ChatInterface } from './components/ChatInterface';
 import { CriteriaSettings } from './components/CriteriaSettings';
@@ -16,11 +16,13 @@ const DEFAULT_CRITERIA: Criteria[] = [
   { id: 'c2', name: 'Trustworthiness', description: "How responsible and transparent the advice is about uncertainty, limits or sources." },
   { id: 'c3', name: 'Accuracy', description: "Whether verifiable facts, steps and figures are correct." },
   { id: 'c4', name: 'Understandable Language', description: "How concise, well-structured and easy to understand the wording is." },
-  { id: 'c5', name: 'Completeness / Match', description: "Whether it covers the essential needs and gives a concrete next step (e.g., contact/location/time/materials, ≥2 elements)." }
+  { id: 'c5', name: 'Completeness / Match', description: "Whether it covers the essential needs and gives a concrete next step (e.g., contact/location/time/materials, ≥2 elements)." },
+  { id: 'c6', name: 'Helpfulness / Task Progress', description: "Whether the AI meaningfully moved the user closer to their goal. A response that only asks for clarification without offering any value, or loops without progress, should score low regardless of accuracy." }
 ];
 
 const App: React.FC = () => {
   const [viewState, setViewState] = useState<ViewState>('dashboard');
+  const [categoryFilter, setCategoryFilter] = useState<ConversationCategory | 'All'>('All');
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversation, setCurrentConversation] = useState<Conversation | null>(null);
   const [criteria, setCriteria] = useState<Criteria[]>(DEFAULT_CRITERIA);
@@ -32,11 +34,22 @@ const App: React.FC = () => {
   const [showContextInputs, setShowContextInputs] = useState(false);
   const [activeProvider, setActiveProvider] = useState<'gemini' | 'openai' | 'anthropic'>('gemini');
   const [isDragging, setIsDragging] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [hasProviderKey, setHasProviderKey] = useState({
     gemini: false,
     openai: false,
     anthropic: false
   });
+  const [appTemperature, setAppTemperature] = useState<number>(() => {
+    if (typeof window === 'undefined') return 0;
+    const stored = localStorage.getItem('evalai_temperature');
+    return stored !== null ? parseFloat(stored) : 0;
+  });
+
+  const handleTemperatureChange = (val: number) => {
+    setAppTemperature(val);
+    localStorage.setItem('evalai_temperature', String(val));
+  };
 
   const checkKeys = () => {
     const fallbackGeminiKey = localStorage.getItem('evalai_api_key') || '';
@@ -79,8 +92,11 @@ const App: React.FC = () => {
     if (storedCriteria) {
       try {
         const parsed = JSON.parse(storedCriteria);
-        // If it contains the old default values (like Helpfulness or Coherence), migrate to the new ones automatically
-        const isOldDefault = Array.isArray(parsed) && parsed.some(c => c.name === 'Helpfulness' || c.name === 'Coherence');
+        // If it contains old metrics or lacks our new "Helpfulness / Task Progress" metric, migrate automatically
+        const isOldDefault = Array.isArray(parsed) && (
+          parsed.some(c => c.name === 'Helpfulness' || c.name === 'Coherence') ||
+          !parsed.some(c => c.id === 'c6' || c.name.includes('Helpfulness / Task Progress'))
+        );
         if (isOldDefault) {
           setCriteria(DEFAULT_CRITERIA);
           localStorage.setItem(CRITERIA_STORAGE_KEY, JSON.stringify(DEFAULT_CRITERIA));
@@ -109,6 +125,10 @@ const App: React.FC = () => {
       if (storedProvider) {
         setActiveProvider(storedProvider);
       }
+      const storedTemp = localStorage.getItem('evalai_temperature');
+      if (storedTemp !== null) {
+        setAppTemperature(parseFloat(storedTemp));
+      }
     }
   }, [viewState]);
 
@@ -125,8 +145,10 @@ const App: React.FC = () => {
     setIsEvaluating(true);
     try {
       const newConv = await generateSampleConversation();
-      setConversations(prev => [newConv, ...prev]);
-      setCurrentConversation(newConv);
+      const category = await classifyConversation(newConv);
+      const newConvWithCategory = { ...newConv, category };
+      setConversations(prev => [newConvWithCategory, ...prev]);
+      setCurrentConversation(newConvWithCategory);
       setViewState('editor');
     } catch (e: any) {
       setError(e?.message || "Failed to generate sample conversation.");
@@ -135,23 +157,199 @@ const App: React.FC = () => {
     }
   };
 
-  const handleDownload = () => {
-    if (!currentConversation) return;
-
-    const jsonString = JSON.stringify(currentConversation, null, 2);
-    const blob = new Blob([jsonString], { type: 'application/json' });
+  const downloadFile = (filename: string, content: string, contentType: string) => {
+    const blob = new Blob([content], { type: contentType });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    
-    // Create a safe filename
-    const safeTitle = currentConversation.title.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'conversation';
     link.href = url;
-    link.download = `${safeTitle}_evaluated.json`;
+    link.download = filename;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
 
-  const parseUploadedFile = (fileName: string, textContent: string) => {
+  const generateTextReport = (conv: Conversation): string => {
+    const border = "================================================================================";
+    const divider = "--------------------------------------------------------------------------------";
+    
+    let report = "";
+    report += `${border}\n`;
+    report += `MATCHEVAL SYSTEM REPORT - EVALUATION RESULTS\n`;
+    report += `${border}\n`;
+    report += `Conversation Title: ${conv.title}\n`;
+    report += `Generated At:       ${conv.evaluation ? new Date(conv.evaluation.timestamp).toLocaleString() : 'N/A'}\n`;
+    report += `Turn Count:         ${conv.messages.length} turns\n`;
+    if (conv.evaluation) {
+      report += `Overall Score:      ${conv.evaluation.overallScore}/10\n`;
+    } else {
+      report += `Overall Score:      DRAFT (No Evaluation Run Yet)\n`;
+    }
+    report += `${divider}\n`;
+    
+    if (conv.evaluation) {
+      report += `\nEXECUTIVE SUMMARY:\n`;
+      report += `${conv.evaluation.summary}\n\n`;
+      report += `${divider}\n`;
+      
+      if (conv.evaluation.factCheckReport) {
+        report += `\nFACT CHECK ANALYSIS:\n`;
+        report += `${conv.evaluation.factCheckReport}\n`;
+        if (conv.evaluation.factCheckSources && conv.evaluation.factCheckSources.length > 0) {
+          report += `Sources:\n`;
+          conv.evaluation.factCheckSources.forEach(src => {
+            report += ` - ${src.title} (${src.uri})\n`;
+          });
+        }
+        report += `\n${divider}\n`;
+      }
+      
+      report += `\nCRITERIA BREAKDOWN:\n`;
+      conv.evaluation.metrics.forEach(metric => {
+        report += `\n*  ${metric.name}: ${metric.score}/10\n`;
+        report += `   Reasoning: ${metric.reasoning}\n`;
+      });
+      report += `\n${divider}\n`;
+      
+      if (conv.evaluation.suggestedImprovements) {
+        report += `\nSUGGESTED IMPROVEMENTS:\n`;
+        const raw = conv.evaluation.suggestedImprovements;
+        let lines: string[] = [];
+        if (Array.isArray(raw)) {
+          lines = raw.map(item => String(item));
+        } else if (typeof raw === 'string') {
+          lines = raw.split('\n');
+        } else if (raw) {
+          lines = [String(raw)];
+        }
+        lines.filter(l => l.trim()).forEach(line => {
+          const clean = line.replace(/^[\*\-•]\s*/, '').trim();
+          report += ` - ${clean}\n`;
+        });
+        report += `\n${divider}\n`;
+      }
+    } else {
+      report += `\nNo evaluation report available for this conversation.\n`;
+    }
+    
+    report += `\nTRANSCRIPT:\n`;
+    conv.messages.forEach((msg, idx) => {
+      report += `\n[Turn ${idx + 1}] ${msg.role.toUpperCase()}:\n`;
+      report += `${msg.content}\n`;
+      if (msg.comments && msg.comments.length > 0) {
+        report += `  Comments:\n`;
+        msg.comments.forEach(c => {
+          report += `    - [${new Date(c.timestamp).toLocaleTimeString()}] ${c.text}\n`;
+        });
+      }
+    });
+    
+    report += `\n${border}\n`;
+    return report;
+  };
+
+  const generateMarkdownReport = (conv: Conversation): string => {
+    let md = `# MatchEval Evaluation Report: ${conv.title}\n\n`;
+    
+    md += `- **Generated At:** ${conv.evaluation ? new Date(conv.evaluation.timestamp).toLocaleString() : 'N/A'}\n`;
+    md += `- **Turns:** ${conv.messages.length} messages\n`;
+    if (conv.evaluation) {
+      md += `- **Overall Score:** \`${conv.evaluation.overallScore}/10\`\n\n`;
+      
+      md += `## Executive Summary\n\n${conv.evaluation.summary}\n\n`;
+      
+      if (conv.evaluation.factCheckReport) {
+        md += `## Fact Check Analysis\n\n${conv.evaluation.factCheckReport}\n\n`;
+        if (conv.evaluation.factCheckSources && conv.evaluation.factCheckSources.length > 0) {
+          md += `### Fact Check Sources\n\n`;
+          conv.evaluation.factCheckSources.forEach(src => {
+            md += `- [${src.title}](${src.uri})\n`;
+          });
+          md += `\n`;
+        }
+      }
+      
+      md += `## Criteria Breakdown\n\n`;
+      conv.evaluation.metrics.forEach(metric => {
+        md += `### ${metric.name} (${metric.score}/10)\n\n`;
+        md += `${metric.reasoning}\n\n`;
+      });
+      
+      if (conv.evaluation.suggestedImprovements) {
+        md += `## Suggested Improvements\n\n`;
+        const raw = conv.evaluation.suggestedImprovements;
+        let lines: string[] = [];
+        if (Array.isArray(raw)) {
+          lines = raw.map(item => String(item));
+        } else if (typeof raw === 'string') {
+          lines = raw.split('\n');
+        } else if (raw) {
+          lines = [String(raw)];
+        }
+        lines.filter(l => l.trim()).forEach(line => {
+          const clean = line.replace(/^[\*\-•]\s*/, '').trim();
+          md += `- ${clean}\n`;
+        });
+        md += `\n`;
+      }
+    } else {
+      md += `*No evaluation available.*\n\n`;
+    }
+    
+    md += `## Conversation Transcript\n\n`;
+    conv.messages.forEach((msg) => {
+      md += `### **${msg.role === 'user' ? 'User' : 'Assistant'}**\n\n`;
+      md += `${msg.content}\n\n`;
+      if (msg.comments && msg.comments.length > 0) {
+        md += `#### Comments\n\n`;
+        msg.comments.forEach(c => {
+          md += `- ${c.text} *(${new Date(c.timestamp).toLocaleTimeString()})*\n`;
+        });
+        md += `\n`;
+      }
+    });
+    
+    return md;
+  };
+
+  const handleExportConversation = (format: 'json' | 'txt' | 'md') => {
+    if (!currentConversation) return;
+    const safeTitle = currentConversation.title.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'conversation';
+    
+    if (format === 'json') {
+      const jsonString = JSON.stringify(currentConversation, null, 2);
+      downloadFile(`${safeTitle}_evaluated.json`, jsonString, 'application/json');
+    } else if (format === 'txt') {
+      const txtContent = generateTextReport(currentConversation);
+      downloadFile(`${safeTitle}_report.txt`, txtContent, 'text/plain');
+    } else if (format === 'md') {
+      const mdContent = generateMarkdownReport(currentConversation);
+      downloadFile(`${safeTitle}_report.md`, mdContent, 'text/markdown');
+    }
+  };
+
+  const handleBulkExport = (format: 'json' | 'txt' | 'md') => {
+    const selectedConvs = conversations.filter(c => selectedIds.includes(c.id));
+    if (selectedConvs.length === 0) return;
+    
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 10);
+    
+    if (format === 'json') {
+      const jsonString = JSON.stringify(selectedConvs, null, 2);
+      downloadFile(`matcheval_bulk_export_${timestamp}.json`, jsonString, 'application/json');
+    } else if (format === 'txt') {
+      const divider = "\n\n" + "=".repeat(100) + "\n\n" + "  NEXT MATCHEVAL REPORT IN BULK EXPORT\n" + "=".repeat(100) + "\n\n";
+      const txtContent = selectedConvs.map(generateTextReport).join(divider);
+      downloadFile(`matcheval_bulk_report_${timestamp}.txt`, txtContent, 'text/plain');
+    } else if (format === 'md') {
+      const divider = "\n\n---\n\n";
+      const mdContent = "# MatchEval Bulk Reports Export\n\n" + selectedConvs.map(generateMarkdownReport).join(divider);
+      downloadFile(`matcheval_bulk_report_${timestamp}.md`, mdContent, 'text/markdown');
+    }
+  };
+
+  const parseUploadedFile = (fileName: string, textContent: string): Conversation => {
     let newConv: Conversation;
 
     if (fileName.endsWith('.json')) {
@@ -322,24 +520,72 @@ const App: React.FC = () => {
       throw new Error("Unsupported file type. Please upload a .json or .txt file.");
     }
 
-    setConversations(prev => [newConv, ...prev]);
-    setCurrentConversation(newConv);
-    setViewState('editor');
+    return newConv;
+  };
+
+  const parseFile = (file: File): Promise<Conversation> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const textContent = e.target?.result as string;
+          const conv = parseUploadedFile(file.name, textContent);
+          // Ensure guaranteed unique ID to prevent conflicts when loading in batch
+          const seed = Math.random().toString(36).substring(2, 9);
+          conv.id = `${conv.id}-${seed}`;
+          conv.messages = conv.messages.map((m, idx) => ({
+            ...m,
+            id: `${m.id}-${seed}-${idx}`
+          }));
+          resolve(conv);
+        } catch (err: any) {
+          reject(new Error(`${file.name}: ${err?.message || "Failed to parse"}`));
+        }
+      };
+      reader.onerror = () => reject(new Error(`Failed to read file: ${file.name}`));
+      reader.readAsText(file);
+    });
+  };
+
+  const handleFiles = async (files: FileList | File[]) => {
+    if (!files || files.length === 0) return;
+    setError(null);
+
+    const parsedConvs: Conversation[] = [];
+    const errors: string[] = [];
+
+    const promises = Array.from(files).map(async (file) => {
+      try {
+        const conv = await parseFile(file);
+        const category = await classifyConversation(conv);
+        parsedConvs.push({ ...conv, category });
+      } catch (err: any) {
+        errors.push(err?.message || `Failed to process ${file.name}`);
+      }
+    });
+
+    await Promise.all(promises);
+
+    if (parsedConvs.length > 0) {
+      // Add all new conversations to the top of the list
+      setConversations(prev => [...parsedConvs, ...prev]);
+      if (parsedConvs.length === 1) {
+        setCurrentConversation(parsedConvs[0]);
+        setViewState('editor');
+      } else {
+        setViewState('dashboard');
+      }
+    }
+
+    if (errors.length > 0) {
+      setError(`Some files failed to import:\n${errors.join('\n')}`);
+    }
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        parseUploadedFile(file.name, e.target?.result as string);
-      } catch (err: any) {
-        setError(err?.message || "Parsing failed. Please check the file format.");
-      }
-    };
-    reader.readAsText(file);
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    handleFiles(files);
     event.target.value = '';
   };
 
@@ -360,18 +606,9 @@ const App: React.FC = () => {
     e.stopPropagation();
     setIsDragging(false);
 
-    const file = e.dataTransfer.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        parseUploadedFile(file.name, event.target?.result as string);
-      } catch (err: any) {
-        setError(err?.message || "Failed to parse file.");
-      }
-    };
-    reader.readAsText(file);
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+    handleFiles(files);
   };
 
   const handleEvaluate = async () => {
@@ -466,10 +703,32 @@ const App: React.FC = () => {
              </button>
              {viewState === 'editor' && (
                <>
-                 <Button variant="secondary" size="sm" onClick={handleDownload} title="Download JSON">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                    Download
-                 </Button>
+                 <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200 gap-1 select-none">
+                   <button 
+                     type="button"
+                     onClick={() => handleExportConversation('json')} 
+                     title="Download JSON (Raw Conversation Data & Evaluation)"
+                     className="px-2.5 py-1 text-xs font-bold text-gray-750 hover:bg-white rounded transition-colors"
+                   >
+                     JSON
+                   </button>
+                   <button 
+                     type="button"
+                     onClick={() => handleExportConversation('txt')} 
+                     title="Download Text Evaluation Report"
+                     className="px-2.5 py-1 text-xs font-bold text-gray-750 hover:bg-white rounded transition-colors"
+                   >
+                     TXT Report
+                   </button>
+                   <button 
+                     type="button"
+                     onClick={() => handleExportConversation('md')} 
+                     title="Download Markdown Report"
+                     className="px-2.5 py-1 text-xs font-bold text-gray-750 hover:bg-white rounded transition-colors"
+                   >
+                     Markdown
+                   </button>
+                 </div>
                  <Button variant="ghost" size="sm" onClick={() => setViewState('dashboard')}>Back to Dashboard</Button>
                </>
              )}
@@ -506,8 +765,8 @@ const App: React.FC = () => {
               <div className="flex gap-3">
                  <label className="cursor-pointer inline-flex items-center justify-center rounded-lg font-bold transition-colors focus:outline-none bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 px-4 py-2 text-sm shadow-xs select-none">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-2 text-indigo-600"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                    <span>Upload JSON / TXT</span>
-                    <input type="file" className="hidden" accept=".json,.txt" onChange={handleFileUpload} />
+                    <span>Upload JSON / TXT Files</span>
+                    <input type="file" multiple className="hidden" accept=".json,.txt" onChange={handleFileUpload} />
                  </label>
                  <Button onClick={handleCreateNew} isLoading={isEvaluating}>Generate Sample</Button>
               </div>
@@ -519,6 +778,97 @@ const App: React.FC = () => {
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-bounce text-indigo-600"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                 <p className="font-extrabold text-lg">Drop your JSON or TXT file to import conversation</p>
                 <p className="text-xs font-semibold text-indigo-600">Supports MatchEval exports, raw message arrays, or formatted transcripts</p>
+              </div>
+            )}
+
+            {conversations.length > 0 && (
+              <div className="mb-6 bg-white p-4 rounded-xl border border-gray-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs select-none animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center h-5">
+                    <input 
+                      type="checkbox"
+                      id="selectAll"
+                      checked={selectedIds.length === conversations.length && conversations.length > 0}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedIds(conversations.map(c => c.id));
+                        } else {
+                          setSelectedIds([]);
+                        }
+                      }}
+                      className="h-4 w-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer"
+                    />
+                  </div>
+                  <label htmlFor="selectAll" className="text-sm font-semibold text-gray-750 cursor-pointer">
+                    Select All ({conversations.length})
+                  </label>
+                  {selectedIds.length > 0 && (
+                    <span className="text-xs bg-indigo-50 border border-indigo-100 text-indigo-700 px-2.5 py-1 rounded-full font-bold">
+                      {selectedIds.length} Selected
+                    </span>
+                  )}
+                </div>
+                
+                {selectedIds.length > 0 && (
+                  <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                    <span className="text-xs text-gray-400 self-center mr-1 font-semibold uppercase tracking-wider hidden sm:block">Export As:</span>
+                    
+                    <Button 
+                      variant="secondary" 
+                      size="sm"
+                      onClick={() => handleBulkExport('json')}
+                    >
+                      JSON Archive
+                    </Button>
+
+                    <Button 
+                      variant="secondary" 
+                      size="sm"
+                      onClick={() => handleBulkExport('txt')}
+                    >
+                      TXT Report
+                    </Button>
+
+                    <Button 
+                      variant="secondary" 
+                      size="sm"
+                      onClick={() => handleBulkExport('md')}
+                    >
+                      Markdown
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {conversations.length > 0 && (
+              <div className="flex gap-2 flex-wrap mb-6 items-center select-none bg-slate-50/50 p-2.5 rounded-xl border border-gray-200 shadow-2xs">
+                <span className="text-xs font-extrabold text-gray-400 uppercase tracking-widest ml-2 flex items-center gap-1">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                  Category Filter
+                </span>
+                <div className="flex gap-1.5 flex-wrap ml-2">
+                  {(['All', 'Normal', 'Edge Case', 'Multilingual', 'Sensitive', 'Uncategorized'] as const).map(cat => {
+                    const count = cat === 'All' 
+                      ? conversations.length 
+                      : conversations.filter(c => c.category === cat || (cat === 'Uncategorized' && !c.category)).length;
+
+                    return (
+                      <button
+                        key={cat}
+                        onClick={() => setCategoryFilter(cat)}
+                        className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all duration-150 flex items-center gap-1.5 cursor-pointer hover:scale-102 active:scale-98 ${
+                          categoryFilter === cat
+                            ? 'bg-indigo-650 text-white border-indigo-650 shadow-xs ring-2 ring-indigo-500/10 font-bold'
+                            : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        <span>{cat}</span>
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${categoryFilter === cat ? 'bg-indigo-700/60 text-indigo-50' : 'bg-gray-100 text-gray-500'}`}>{count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
@@ -538,25 +888,72 @@ const App: React.FC = () => {
                       <div className="flex gap-2 pt-2">
                         <label className="cursor-pointer inline-flex items-center justify-center rounded-lg font-bold transition-colors bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 text-sm shadow-sm select-none">
                           Browse Files
-                          <input type="file" className="hidden" accept=".json,.txt" onChange={handleFileUpload} />
+                          <input type="file" multiple className="hidden" accept=".json,.txt" onChange={handleFileUpload} />
                         </label>
                         <Button variant="secondary" onClick={handleCreateNew} isLoading={isEvaluating}>Generate Sample</Button>
                       </div>
                     </div>
                 </div>
-              ) : (
-                conversations.map(conv => (
-                  <div 
-                    key={conv.id} 
-                    onClick={() => { setCurrentConversation(conv); setViewState('editor'); }}
-                    className="group bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-all cursor-pointer relative"
-                  >
-                    <div className="flex justify-between items-start mb-4">
-                       <h3 className="font-semibold text-lg text-gray-900 line-clamp-1">{conv.title}</h3>
-                       <button onClick={(e) => deleteConversation(conv.id, e)} className="text-gray-400 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                       </button>
+              ) : conversations.filter(conv => {
+                  if (categoryFilter === 'All') return true;
+                  if (categoryFilter === 'Uncategorized') return !conv.category || conv.category === 'Uncategorized';
+                  return conv.category === categoryFilter;
+                }).length === 0 ? (
+                <div className="col-span-full py-16 text-center bg-white rounded-2xl border border-gray-200">
+                  <div className="flex flex-col items-center justify-center space-y-2 animate-in zoom-in-95 duration-200">
+                    <div className="p-3.5 rounded-full bg-slate-50 text-slate-400">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
                     </div>
+                    <p className="text-gray-950 font-bold">No results found for category "{categoryFilter}"</p>
+                    <p className="text-gray-500 text-xs">Try selecting another filter or generate a new conversation.</p>
+                    <button onClick={() => setCategoryFilter('All')} className="mt-2 text-xs text-indigo-650 font-extrabold hover:underline cursor-pointer">
+                      Show All Conversations
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                conversations
+                  .filter(conv => {
+                    if (categoryFilter === 'All') return true;
+                    if (categoryFilter === 'Uncategorized') return !conv.category || conv.category === 'Uncategorized';
+                    return conv.category === categoryFilter;
+                  })
+                  .map(conv => (
+                   <div 
+                     key={conv.id} 
+                     onClick={() => { setCurrentConversation(conv); setViewState('editor'); }}
+                     className={`group bg-white rounded-xl border p-6 hover:shadow-lg transition-all cursor-pointer relative ${selectedIds.includes(conv.id) ? 'border-indigo-500 ring-2 ring-indigo-500/10 bg-indigo-50/5' : 'border-gray-200'}`}
+                   >
+                     <div className="flex justify-between items-start mb-4 gap-2">
+                        <div className="flex items-center gap-3 flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
+                          <input 
+                            type="checkbox"
+                            checked={selectedIds.includes(conv.id)}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setSelectedIds(prev => checked ? [...prev, conv.id] : prev.filter(id => id !== conv.id));
+                            }}
+                            className="h-4 w-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer flex-shrink-0"
+                          />
+                          <h3 className="font-semibold text-lg text-gray-900 line-clamp-1 truncate">{conv.title}</h3>
+                        </div>
+                        <button onClick={(e) => deleteConversation(conv.id, e)} className="text-gray-400 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        </button>
+                     </div>
+                    
+                     {/* Category label badge below the title line */}
+                     <div className="mb-4">
+                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                         conv.category === 'Normal'      ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                         conv.category === 'Edge Case'   ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                         conv.category === 'Multilingual'? 'bg-sky-50 text-sky-700 border-sky-100' :
+                         conv.category === 'Sensitive'   ? 'bg-rose-50 text-rose-700 border-rose-200' :
+                                                           'bg-slate-50 text-slate-600 border-slate-200'
+                       }`}>
+                         {conv.category || 'Uncategorized'}
+                       </span>
+                     </div>
                     
                     <div className="flex justify-between items-end">
                        <div className="text-sm text-gray-500">
@@ -595,10 +992,23 @@ const App: React.FC = () => {
               
               {/* Left Column: Chat (Sticky on Desktop) */}
               <div className="lg:col-span-7 flex flex-col lg:sticky lg:top-24 lg:h-[calc(100vh-8rem)]">
-                <div className="mb-4 flex justify-between items-center flex-shrink-0">
-                   <h2 className="text-xl font-bold text-gray-800 truncate pr-4">{currentConversation.title}</h2>
-                   <div className="flex gap-2 text-sm text-gray-500">
-                     <span className="hidden sm:inline">Click message text to edit.</span>
+                <div className="mb-4 flex flex-col gap-1.5 flex-shrink-0 animate-in fade-in duration-350">
+                   <div className="flex justify-between items-center">
+                      <h2 className="text-xl font-bold text-gray-800 truncate pr-4">{currentConversation.title}</h2>
+                      <div className="flex gap-2 text-sm text-gray-500">
+                        <span className="hidden sm:inline">Click message text to edit.</span>
+                      </div>
+                   </div>
+                   <div className="flex items-center gap-2">
+                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                       currentConversation.category === 'Normal'      ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                       currentConversation.category === 'Edge Case'   ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                       currentConversation.category === 'Multilingual'? 'bg-sky-50 text-sky-700 border-sky-100' :
+                       currentConversation.category === 'Sensitive'   ? 'bg-rose-50 text-rose-700 border-rose-200' :
+                                                                         'bg-slate-50 text-slate-600 border-slate-200'
+                     }`}>
+                       {currentConversation.category || 'Uncategorized'}
+                     </span>
                    </div>
                 </div>
                 {/* Chat wrapper to handle internal scroll for sticky behavior */}
@@ -713,6 +1123,37 @@ const App: React.FC = () => {
                           )}
                         </div>
 
+                        {/* Interactive LLM Temperature slider right in sidebar */}
+                        <div className="mb-4 bg-slate-50 p-3 rounded-lg border border-gray-200">
+                          <div className="flex justify-between items-center mb-1.5">
+                            <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">
+                              Judge Temperature: <span className="font-extrabold text-indigo-700">{appTemperature.toFixed(1)}</span>
+                            </label>
+                            <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-100 font-bold px-1.5 py-0.5 rounded font-sans uppercase">
+                              {appTemperature === 0 ? 'Deterministic' : appTemperature >= 0.7 ? 'Creative' : 'Balanced'}
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-gray-400 font-mono">0.0</span>
+                            <input
+                              type="range"
+                              min="0"
+                              max="1"
+                              step="0.1"
+                              value={appTemperature}
+                              onChange={(e) => handleTemperatureChange(parseFloat(e.target.value))}
+                              className="flex-1 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                            />
+                            <span className="text-[10px] text-gray-400 font-mono">1.0</span>
+                          </div>
+                          <p className="mt-1.5 text-[10px] text-gray-500 leading-relaxed font-sans">
+                            {appTemperature === 0 
+                              ? "Recommended for consistent scoring." 
+                              : "Higher values introduce scoring variance."}
+                          </p>
+                        </div>
+
                         <div className="flex items-center gap-3 mb-4 p-3 bg-gray-50 rounded-lg border border-gray-100">
                            <input 
                              type="checkbox" 
@@ -757,7 +1198,35 @@ const App: React.FC = () => {
                              </div>
                            </div>
                            <div className="mt-4 pt-4 border-t border-gray-100">
-                             <h4 className="text-sm font-semibold text-gray-900 mb-2">Executive Summary</h4>
+                             <div className="flex justify-between items-center mb-2">
+                                <h4 className="text-sm font-semibold text-gray-900">Executive Summary</h4>
+                                <div className="flex bg-gray-50 border border-gray-200 p-0.5 rounded gap-0.5 text-[10px] select-none">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleExportConversation('json')}
+                                    title="Export Evaluation as Raw JSON data file"
+                                    className="px-2 py-0.5 font-bold text-gray-750 hover:bg-white rounded transition-colors"
+                                  >
+                                    JSON
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleExportConversation('txt')}
+                                    title="Export Evaluation as Beautiful Plain Text Report"
+                                    className="px-2 py-0.5 font-bold text-gray-750 hover:bg-white rounded transition-colors"
+                                  >
+                                    TXT
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleExportConversation('md')}
+                                    title="Export Evaluation as Formatted Markdown File"
+                                    className="px-2 py-0.5 font-bold text-gray-750 hover:bg-white rounded transition-colors"
+                                  >
+                                    MD
+                                  </button>
+                                </div>
+                              </div>
                              <p className="text-sm text-gray-600 leading-relaxed">
                                {currentConversation.evaluation.summary}
                              </p>

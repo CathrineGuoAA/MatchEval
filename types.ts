@@ -49,6 +49,7 @@ export interface Conversation {
   referenceContext?: string; // Ground truth / Ideal answer
   domainContext?: string; // Knowledge base / System prompt context
   createdAt: number;
+  category?: ConversationCategory;
 }
 
 export interface Criteria {
@@ -58,3 +59,5 @@ export interface Criteria {
 }
 
 export type ViewState = 'dashboard' | 'editor' | 'settings';
+
+export type ConversationCategory = 'Normal' | 'Edge Case' | 'Multilingual' | 'Sensitive' | 'Uncategorized';

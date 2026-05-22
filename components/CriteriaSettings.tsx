@@ -21,6 +21,7 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
 
   // API Config states
   const [provider, setProvider] = useState<'gemini' | 'openai' | 'anthropic'>('gemini');
+  const [temperature, setTemperature] = useState<number>(0);
   
   const [geminiKey, setGeminiKey] = useState('');
   const [geminiModel, setGeminiModel] = useState('gemini-3.5-flash');
@@ -54,6 +55,7 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
     const config = getLLMConfig();
     
     setProvider(config.provider);
+    setTemperature(config.temperature);
     
     setGeminiKey(config.geminiKey);
     setGeminiModel(config.geminiModel);
@@ -75,6 +77,7 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
 
   const handleSaveAPIConfig = () => {
     localStorage.setItem('evalai_provider', provider);
+    localStorage.setItem('evalai_temperature', String(temperature));
     
     localStorage.setItem('evalai_gemini_api_key', geminiKey);
     localStorage.setItem('evalai_gemini_model', geminiModel);
@@ -106,26 +109,32 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
         setGeminiKey('');
         setGeminiModel('gemini-3.5-flash');
         setGeminiBaseUrl('');
+        setTemperature(0);
         localStorage.removeItem('evalai_gemini_api_key');
         localStorage.removeItem('evalai_gemini_model');
         localStorage.removeItem('evalai_gemini_base_url');
         localStorage.removeItem('evalai_api_key');
+        localStorage.removeItem('evalai_temperature');
         setHasGeminiKey(false);
       } else if (target === 'openai') {
         setOpenaiKey('');
         setOpenaiModel('gpt-4o-mini');
         setOpenaiBaseUrl('');
+        setTemperature(0);
         localStorage.removeItem('evalai_openai_api_key');
         localStorage.removeItem('evalai_openai_model');
         localStorage.removeItem('evalai_openai_base_url');
+        localStorage.removeItem('evalai_temperature');
         setHasOpenaiKey(false);
       } else if (target === 'anthropic') {
         setAnthropicKey('');
         setAnthropicModel('claude-3-5-sonnet-20241022');
         setAnthropicBaseUrl('');
+        setTemperature(0);
         localStorage.removeItem('evalai_anthropic_api_key');
         localStorage.removeItem('evalai_anthropic_model');
         localStorage.removeItem('evalai_anthropic_base_url');
+        localStorage.removeItem('evalai_temperature');
         setHasAnthropicKey(false);
       }
     }
@@ -293,7 +302,7 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
 
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm divide-y divide-gray-200">
             {/* 1. Global Judge Selector */}
-            <div className="p-6 space-y-4 bg-slate-50/50 rounded-t-xl">
+            <div className="p-6 space-y-5 bg-slate-50/50 rounded-t-xl">
               <div>
                 <label className="block text-sm font-bold text-gray-900 mb-1">Active Judge Engine Provider</label>
                 <p className="text-xs text-gray-500 mb-3">All prompt evaluation runs and sample generation triggers will route through this provider.</p>
@@ -328,6 +337,65 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
                   >
                     Anthropic Claude
                   </button>
+                </div>
+              </div>
+
+              {/* Temperature Parameter Slider Box */}
+              <div className="pt-4 border-t border-gray-200">
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-sm font-bold text-gray-950">
+                    Model Temperature: <span className="text-indigo-650 font-extrabold">{temperature.toFixed(1)}</span>
+                  </label>
+                  <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full border ${
+                    temperature === 0 
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                      : temperature >= 0.7 
+                        ? 'bg-amber-50 text-amber-700 border-amber-200' 
+                        : 'bg-blue-50 text-blue-700 border-blue-200'
+                  }`}>
+                    {temperature === 0 ? 'Deterministic (Judge Recommended)' : temperature >= 0.7 ? 'Creative / Diverse' : 'Balanced'}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 mb-4">
+                  Controls prediction randomness. For quantitative LLM-as-a-judge evaluations, a temperature of <strong>0.0</strong> guarantees high precision, reproducibility, and consistency.
+                </p>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+                  <div className="flex-1 flex items-center gap-3">
+                    <span className="text-xs text-gray-400 font-mono">0.0</span>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.1"
+                      value={temperature}
+                      onChange={(e) => setTemperature(parseFloat(e.target.value))}
+                      className="flex-1 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                    />
+                    <span className="text-xs text-gray-400 font-mono">1.0</span>
+                  </div>
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setTemperature(0)}
+                      className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-colors ${temperature === 0 ? 'bg-indigo-650 border-indigo-650 text-white shadow-sm' : 'bg-white border-gray-250 text-gray-700 hover:bg-gray-50'}`}
+                    >
+                      0.0 (Judge)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTemperature(0.5)}
+                      className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-colors ${temperature === 0.5 ? 'bg-indigo-650 border-indigo-650 text-white shadow-sm' : 'bg-white border-gray-250 text-gray-700 hover:bg-gray-50'}`}
+                    >
+                      0.5
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTemperature(0.7)}
+                      className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-colors ${temperature === 0.7 ? 'bg-indigo-650 border-indigo-650 text-white shadow-sm' : 'bg-white border-gray-250 text-gray-700 hover:bg-gray-50'}`}
+                    >
+                      0.7
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
