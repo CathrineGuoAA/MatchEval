@@ -149,7 +149,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
               {/* Comments Section */}
               <div className="mt-2 w-full space-y-2">
-                {msg.comments.map(comment => (
+                {(msg.comments || []).map(comment => (
                   <div key={comment.id} className="bg-yellow-50 border border-yellow-100 p-2 rounded-lg text-xs text-gray-700 relative group/comment">
                     <span className="font-semibold text-yellow-800">Note:</span> {comment.text}
                     <button 

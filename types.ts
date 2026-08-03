@@ -41,6 +41,13 @@ export interface EvaluationResult {
   factCheckSources?: FactCheckSource[];
 }
 
+export interface Folder {
+  id: string;
+  name: string;
+  color?: string;
+  createdAt: number;
+}
+
 export interface Conversation {
   id: string;
   title: string;
@@ -50,6 +57,7 @@ export interface Conversation {
   domainContext?: string; // Knowledge base / System prompt context
   createdAt: number;
   category?: ConversationCategory;
+  folderId?: string; // ID of the folder this conversation belongs to
 }
 
 export interface Criteria {

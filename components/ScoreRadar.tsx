@@ -8,11 +8,19 @@ interface ScoreRadarProps {
 
 export const ScoreRadar: React.FC<ScoreRadarProps> = ({ metrics }) => {
   // Normalize data for chart if needed, but metrics are usually sufficient
-  const data = metrics.map(m => ({
+  const data = (metrics || []).map(m => ({
     subject: m.name,
     A: m.score,
     fullMark: 10,
   }));
+
+  if (data.length === 0) {
+    return (
+      <div className="w-full h-64 flex items-center justify-center text-gray-400 text-sm border border-dashed border-gray-200 rounded-xl bg-gray-50/50">
+        No evaluation metrics data available
+      </div>
+    );
+  }
 
   return (
     <div className="w-full h-64">

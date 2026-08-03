@@ -24,7 +24,7 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
   const [temperature, setTemperature] = useState<number>(0);
   
   const [geminiKey, setGeminiKey] = useState('');
-  const [geminiModel, setGeminiModel] = useState('gemini-3.5-flash');
+  const [geminiModel, setGeminiModel] = useState('gemini-2.5-flash');
   const [geminiBaseUrl, setGeminiBaseUrl] = useState('');
   
   const [openaiKey, setOpenaiKey] = useState('');
@@ -488,14 +488,14 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
                       type="text"
                       value={geminiModel}
                       onChange={(e) => setGeminiModel(e.target.value)}
-                      placeholder="gemini-3.5-flash"
+                      placeholder="gemini-2.5-flash"
                       className="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
                     />
                     <div className="mt-1.5 flex gap-2">
                       <span className="text-xs text-gray-400 font-semibold">Presets:</span>
-                      <button onClick={() => setGeminiModel('gemini-3.5-flash')} className="text-xs text-indigo-500 hover:underline">3.5 Flash</button>
+                      <button onClick={() => setGeminiModel('gemini-2.5-flash')} className="text-xs text-indigo-500 hover:underline font-bold">2.5 Flash</button>
+                      <button onClick={() => setGeminiModel('gemini-2.5-pro')} className="text-xs text-indigo-500 hover:underline">2.5 Pro</button>
                       <button onClick={() => setGeminiModel('gemini-1.5-flash')} className="text-xs text-indigo-500 hover:underline">1.5 Flash</button>
-                      <button onClick={() => setGeminiModel('gemini-1.5-pro')} className="text-xs text-indigo-500 hover:underline">1.5 Pro</button>
                     </div>
                   </div>
 

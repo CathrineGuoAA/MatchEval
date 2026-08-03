@@ -62,7 +62,7 @@ export const getLLMConfig = (): LLMConfig => {
   return {
     provider: (localStorage.getItem('evalai_provider') as any) || 'gemini',
     geminiKey: sessionStorage.getItem('evalai_gemini_api_key') || fallbackGeminiKey || '',
-    geminiModel: localStorage.getItem('evalai_gemini_model') || 'gemini-3.5-flash',
+    geminiModel: localStorage.getItem('evalai_gemini_model') || 'gemini-2.5-flash',
     geminiBaseUrl: localStorage.getItem('evalai_gemini_base_url') || '',
     openaiKey: sessionStorage.getItem('evalai_openai_api_key') || '',
     openaiModel: localStorage.getItem('evalai_openai_model') || 'gpt-4o-mini',
@@ -122,7 +122,7 @@ export const performFactCheck = async (conversation: Conversation): Promise<{ te
   // Gemini uses Web Search Grounding if configured
   if (config.provider === 'gemini') {
     try {
-      const model = config.geminiModel || "gemini-3.5-flash";
+      const model = config.geminiModel || "gemini-2.5-flash";
       const response = await getAI().models.generateContent({
         model,
         contents: prompt,
@@ -391,7 +391,7 @@ Return ONLY a single valid JSON object. No markdown, no text outside the JSON.
 
   // 1. GEMINI EVALUATION
   if (config.provider === 'gemini') {
-    const model = config.geminiModel || "gemini-3.5-flash"; 
+    const model = config.geminiModel || "gemini-2.5-flash"; 
     const response = await getAI().models.generateContent({
       model,
       contents: prompt,
@@ -565,7 +565,7 @@ export const generateSampleConversation = async (): Promise<Conversation> => {
   // 1. GEMINI SAMPLE GENERATION
   if (config.provider === 'gemini') {
     const response = await getAI().models.generateContent({
-      model: config.geminiModel || "gemini-3.5-flash",
+      model: config.geminiModel || "gemini-2.5-flash",
       contents: basePrompt,
       config: {
         responseMimeType: "application/json",
@@ -812,6 +812,9 @@ Reply with a strict JSON format structure:
   try {
     // --- GEMINI ---
     if (config.provider === 'gemini') {
+      if (!config.geminiKey) {
+        return 'Uncategorized';
+      }
       const response = await getAI().models.generateContent({
         model: config.geminiModel || 'gemini-2.5-flash',
         contents: prompt,
