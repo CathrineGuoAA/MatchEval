@@ -102,6 +102,32 @@ const getAI = (): GoogleGenAI => {
 };
 
 /**
+ * Claude may return thinking blocks before the final text block. Read every
+ * text block instead of assuming content[0] contains the answer.
+ */
+const extractAnthropicText = (data: any): string => {
+  const openAIContent = data?.choices?.[0]?.message?.content;
+  if (typeof openAIContent === 'string') return openAIContent.trim();
+
+  if (!Array.isArray(data?.content)) return '';
+
+  return data.content
+    .filter((block: any) => block?.type === 'text' && typeof block.text === 'string')
+    .map((block: any) => block.text)
+    .join('\n')
+    .trim();
+};
+
+/**
+ * Sonnet 5 enables adaptive thinking by default. These calls need compact,
+ * machine-readable output, so disable thinking to preserve the output budget.
+ */
+const getAnthropicThinkingConfig = (model: string): Record<string, any> =>
+  model === 'claude-sonnet-5' || model === 'claude-opus-5'
+    ? { thinking: { type: 'disabled' } }
+    : {};
+
+/**
  * Step 1: Verify facts using Google Search Grounding (Gemini) or LLM self-fact checking (OpenAI/Anthropic)
  */
 export const performFactCheck = async (conversation: Conversation): Promise<{ text: string, sources: Array<{uri: string, title: string}> }> => {
@@ -258,9 +284,11 @@ export const performFactCheck = async (conversation: Conversation): Promise<{ te
           ],
         };
       } else {
+        const model = config.anthropicModel || 'claude-sonnet-5';
         payload = {
-          model: config.anthropicModel || 'claude-sonnet-5',
+          model,
           max_tokens: 1500,
+          ...getAnthropicThinkingConfig(model),
           system: 'You are an objective Fact Verification Assistant.',
           messages: [
             { role: 'user', content: prompt }
@@ -276,12 +304,7 @@ export const performFactCheck = async (conversation: Conversation): Promise<{ te
 
       if (!response.ok) throw new Error(`Claude status ${response.status}`);
       const data = await response.json();
-      let text = "No analysis provided.";
-      if (data.content && Array.isArray(data.content)) {
-        text = data.content[0]?.text;
-      } else if (data.choices?.[0]?.message?.content) {
-        text = data.choices[0].message.content;
-      }
+      const text = extractAnthropicText(data) || "No analysis provided.";
       return { text, sources: [] };
     } catch (e: any) {
       console.error("Anthropic Fact check failed", e);
@@ -510,9 +533,11 @@ Return ONLY a single valid JSON object. No markdown, no text outside the JSON.
         response_format: { type: "json_object" },
       };
     } else {
+      const model = config.anthropicModel || 'claude-sonnet-5';
       payload = {
-        model: config.anthropicModel || 'claude-sonnet-5',
+        model,
         max_tokens: 4000,
+        ...getAnthropicThinkingConfig(model),
         system: systemInstruction,
         messages: [
           { role: 'user', content: `${prompt}\n\nPlease respond with valid JSON only.` }
@@ -532,12 +557,7 @@ Return ONLY a single valid JSON object. No markdown, no text outside the JSON.
     }
 
     const data = await response.json();
-    let text = "";
-    if (data.content && Array.isArray(data.content)) {
-      text = data.content[0]?.text;
-    } else if (data.choices?.[0]?.message?.content) {
-      text = data.choices[0].message.content;
-    }
+    const text = extractAnthropicText(data);
 
     if (!text) throw new Error("Empty response from Claude");
 
@@ -699,9 +719,11 @@ export const generateSampleConversation = async (): Promise<Conversation> => {
         response_format: { type: "json_object" },
       };
     } else {
+      const model = config.anthropicModel || 'claude-sonnet-5';
       payload = {
-        model: config.anthropicModel || 'claude-sonnet-5',
+        model,
         max_tokens: 2500,
+        ...getAnthropicThinkingConfig(model),
         system: "You are a helpful JSON data generator. Always output valid JSON only.",
         messages: [
           { role: 'user', content: `${basePrompt}\n\nIMPORTANT: Return ONLY a raw JSON array. Do not put markdown blocks unless they contain exactly the JSON array.` }
@@ -717,12 +739,7 @@ export const generateSampleConversation = async (): Promise<Conversation> => {
 
     if (!response.ok) throw new Error(`Claude status ${response.status}`);
     const data = await response.json();
-    let text = "";
-    if (data.content && Array.isArray(data.content)) {
-      text = data.content[0]?.text;
-    } else if (data.choices?.[0]?.message?.content) {
-      text = data.choices[0].message.content;
-    }
+    const text = extractAnthropicText(data);
 
     if (!text) throw new Error("Empty generation response from Claude");
 
@@ -877,11 +894,12 @@ Reply with a strict JSON format structure:
         body: JSON.stringify({
           model: config.anthropicModel || 'claude-sonnet-5',
           max_tokens: 100,
+          ...getAnthropicThinkingConfig(config.anthropicModel || 'claude-sonnet-5'),
           messages: [{ role: 'user', content: prompt }],
         }),
       });
       const data = await response.json();
-      const text = data.content?.[0]?.text || '{}';
+      const text = extractAnthropicText(data) || '{}';
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       const result = JSON.parse(jsonMatch ? jsonMatch[0] : '{}');
       return (result.category as ConversationCategory) || 'Uncategorized';
