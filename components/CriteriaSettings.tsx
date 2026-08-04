@@ -34,6 +34,7 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
   const [anthropicKey, setAnthropicKey] = useState('');
   const [anthropicModel, setAnthropicModel] = useState('claude-sonnet-5');
   const [anthropicBaseUrl, setAnthropicBaseUrl] = useState('');
+  const [anthropicEffort, setAnthropicEffort] = useState<'low' | 'medium' | 'high' | 'xhigh' | 'max'>('medium');
 
   // Show/Hide Keys state
   const [showGeminiKey, setShowGeminiKey] = useState(false);
@@ -68,6 +69,7 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
     setAnthropicKey(config.anthropicKey);
     setAnthropicModel(config.anthropicModel);
     setAnthropicBaseUrl(config.anthropicBaseUrl);
+    setAnthropicEffort(config.anthropicEffort);
 
     // Initial check for key existence (to show green/gray indicators)
     setHasGeminiKey(!!config.geminiKey);
@@ -88,6 +90,7 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
     
     localStorage.setItem('evalai_anthropic_model', anthropicModel);
     localStorage.setItem('evalai_anthropic_base_url', anthropicBaseUrl);
+    localStorage.setItem('evalai_anthropic_effort', anthropicEffort);
 
     // Store keys strictly in sessionStorage (RAM / active tab session)
     sessionStorage.setItem('evalai_gemini_api_key', geminiKey);
@@ -655,6 +658,23 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
                       <button onClick={() => setAnthropicModel('claude-sonnet-5')} className="text-xs text-indigo-500 hover:underline">Sonnet 5</button>
                       <button onClick={() => setAnthropicModel('claude-haiku-4-5-20251001')} className="text-xs text-indigo-500 hover:underline">Haiku 4.5</button>
                     </div>
+                  </div>
+
+                  {/* Effort (Sonnet 5 / Opus 5 only - ignored on other models) */}
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Scoring Effort (Sonnet 5 / Opus 5 only)</label>
+                    <select
+                      value={anthropicEffort}
+                      onChange={(e) => setAnthropicEffort(e.target.value as typeof anthropicEffort)}
+                      className="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                    >
+                      <option value="low">Low - fastest, cheapest</option>
+                      <option value="medium">Medium - recommended balance</option>
+                      <option value="high">High - API default, slower</option>
+                      <option value="xhigh">X-High - deepest reasoning</option>
+                      <option value="max">Max - slowest, most expensive</option>
+                    </select>
+                    <p className="mt-1 text-xs text-gray-400">Controls how much Claude reasons before scoring. Lower = faster and cheaper. Has no effect on Haiku or other providers.</p>
                   </div>
 
                   {/* Base URL */}

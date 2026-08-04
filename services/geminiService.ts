@@ -12,6 +12,7 @@ export interface LLMConfig {
   anthropicKey: string;
   anthropicModel: string;
   anthropicBaseUrl: string;
+  anthropicEffort: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   temperature: number;
 }
 
@@ -31,6 +32,7 @@ export const getLLMConfig = (): LLMConfig => {
       anthropicKey: '',
       anthropicModel: 'claude-sonnet-5',
       anthropicBaseUrl: '',
+      anthropicEffort: 'medium',
       temperature: 0,
     };
   }
@@ -70,6 +72,7 @@ export const getLLMConfig = (): LLMConfig => {
     anthropicKey: sessionStorage.getItem('evalai_anthropic_api_key') || '',
     anthropicModel: localStorage.getItem('evalai_anthropic_model') || 'claude-sonnet-5',
     anthropicBaseUrl: localStorage.getItem('evalai_anthropic_base_url') || '',
+    anthropicEffort: (localStorage.getItem('evalai_anthropic_effort') as any) || 'medium',
     temperature: storedTemp !== null ? parseFloat(storedTemp) : 0,
   };
 };
@@ -578,7 +581,7 @@ Return ONLY a single valid JSON object. No markdown, no text outside the JSON.
         model,
         max_tokens: 8000,
         ...getAnthropicThinkingConfig(model, true),
-        ...getAnthropicEffortConfig(model, 'medium'),
+        ...getAnthropicEffortConfig(model, config.anthropicEffort),
         system: systemInstruction,
         messages: [
           { role: 'user', content: `${prompt}\n\nPlease respond with valid JSON only.` }
