@@ -1499,12 +1499,12 @@ const App: React.FC = () => {
                   onClick={() => setSelectedFolderId('ALL')}
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all duration-150 flex items-center gap-2 cursor-pointer ${
                     selectedFolderId === 'ALL'
-                      ? 'bg-indigo-650 text-white border-indigo-650 shadow-xs ring-2 ring-indigo-500/10 font-bold'
+                      ? 'bg-indigo-50 text-indigo-950 border-indigo-400 shadow-xs ring-2 ring-indigo-200/70'
                       : 'bg-slate-50 text-gray-700 border-gray-200 hover:bg-gray-100'
                   }`}
                 >
                   <span>📁 All Conversations</span>
-                  <span className={`text-[10px] px-2 py-0.2 rounded-full font-black ${selectedFolderId === 'ALL' ? 'bg-indigo-800 text-white' : 'bg-gray-200 text-gray-700'}`}>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${selectedFolderId === 'ALL' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}>
                     {conversations.length}
                   </span>
                 </button>
@@ -1514,12 +1514,12 @@ const App: React.FC = () => {
                   onClick={() => setSelectedFolderId('UNASSIGNED')}
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all duration-150 flex items-center gap-2 cursor-pointer ${
                     selectedFolderId === 'UNASSIGNED'
-                      ? 'bg-indigo-650 text-white border-indigo-650 shadow-xs ring-2 ring-indigo-500/10 font-bold'
+                      ? 'bg-indigo-50 text-indigo-950 border-indigo-400 shadow-xs ring-2 ring-indigo-200/70'
                       : 'bg-slate-50 text-gray-700 border-gray-200 hover:bg-gray-100'
                   }`}
                 >
                   <span>📂 Unassigned</span>
-                  <span className={`text-[10px] px-2 py-0.2 rounded-full font-black ${selectedFolderId === 'UNASSIGNED' ? 'bg-indigo-800 text-white' : 'bg-gray-200 text-gray-700'}`}>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${selectedFolderId === 'UNASSIGNED' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}>
                     {conversations.filter(c => !c.folderId).length}
                   </span>
                 </button>
@@ -1536,20 +1536,20 @@ const App: React.FC = () => {
                         onClick={() => setSelectedFolderId(folder.id)}
                         className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all duration-150 flex items-center gap-2 cursor-pointer pr-7 ${
                           isSelected
-                            ? 'bg-indigo-650 text-white border-indigo-650 shadow-xs ring-2 ring-indigo-500/10'
+                            ? 'bg-indigo-50 text-indigo-950 border-indigo-400 shadow-xs ring-2 ring-indigo-200/70'
                             : `${colorInfo.bg} ${colorInfo.text} ${colorInfo.border} hover:opacity-90`
                         }`}
                       >
-                        <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-white' : colorInfo.dot}`}></span>
+                        <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-indigo-600' : colorInfo.dot}`}></span>
                         <span>{folder.name}</span>
-                        <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${isSelected ? 'bg-indigo-800 text-white' : 'bg-white/90 text-gray-700 border border-gray-200'}`}>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-extrabold ${isSelected ? 'bg-indigo-600 text-white' : 'bg-white/90 text-gray-700 border border-gray-200'}`}>
                           {count}
                         </span>
                       </button>
                       <button
                         onClick={(e) => handleDeleteFolder(folder.id, e)}
                         title="Delete folder"
-                        className={`absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 opacity-0 group-hover:opacity-100 transition-opacity rounded ${isSelected ? 'text-white hover:text-red-200' : 'text-gray-400 hover:text-red-500'}`}
+                        className={`absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 opacity-0 group-hover:opacity-100 transition-opacity rounded ${isSelected ? 'text-indigo-500 hover:text-red-600' : 'text-gray-400 hover:text-red-500'}`}
                       >
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                       </button>
