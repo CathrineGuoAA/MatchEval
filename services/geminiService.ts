@@ -135,6 +135,18 @@ const getAnthropicThinkingConfig = (model: string, enableThinking = false): Reco
 };
 
 /**
+ * `effort` only exists on Sonnet 5 / Opus 5 (errors on Haiku 4.5 and older
+ * models, so don't send it there). 'medium' trades a bit of scoring depth
+ * for noticeably lower latency/cost than the API default of 'high' -
+ * Sonnet 5 specifically holds up well at medium/low per Anthropic's own
+ * guidance, so this isn't just a blind speed/quality tradeoff.
+ */
+const getAnthropicEffortConfig = (model: string, effort: 'low' | 'medium' | 'high' | 'xhigh' | 'max'): Record<string, any> =>
+  model === 'claude-sonnet-5' || model === 'claude-opus-5'
+    ? { output_config: { effort } }
+    : {};
+
+/**
  * Step 1: Verify facts using Google Search Grounding (Gemini) or LLM self-fact checking (OpenAI/Anthropic)
  */
 export const performFactCheck = async (conversation: Conversation): Promise<{ text: string, sources: Array<{uri: string, title: string}> }> => {
@@ -566,6 +578,7 @@ Return ONLY a single valid JSON object. No markdown, no text outside the JSON.
         model,
         max_tokens: 8000,
         ...getAnthropicThinkingConfig(model, true),
+        ...getAnthropicEffortConfig(model, 'medium'),
         system: systemInstruction,
         messages: [
           { role: 'user', content: `${prompt}\n\nPlease respond with valid JSON only.` }
