@@ -291,15 +291,22 @@ export const performFactCheck = async (conversation: Conversation): Promise<{ te
           ],
         };
       } else {
+        // Unlike Gemini (Google Search Grounding), Claude had no real
+        // internet access here - it was doing a pure self-check against
+        // training knowledge, so any specific detail it can't recall
+        // (a phone number, an address) gets flagged as "unverifiable /
+        // possible hallucination" even when it's real and findable online.
+        // web_search gives it the same real-time lookup ability Gemini has.
         const model = config.anthropicModel || 'claude-sonnet-5';
         payload = {
           model,
-          max_tokens: 1500,
+          max_tokens: 2000,
           ...getAnthropicThinkingConfig(model),
-          system: 'You are an objective Fact Verification Assistant.',
+          system: 'You are an objective Fact Verification Assistant. Use the web_search tool to look up specific claims (phone numbers, addresses, organization names, eligibility rules) instead of relying only on what you recall - only flag something as unverifiable if a search does not turn it up.',
           messages: [
             { role: 'user', content: prompt }
           ],
+          tools: [{ type: 'web_search_20260209', name: 'web_search' }],
         };
       }
 
@@ -312,7 +319,21 @@ export const performFactCheck = async (conversation: Conversation): Promise<{ te
       if (!response.ok) throw new Error(`Claude status ${response.status}`);
       const data = await response.json();
       const text = extractAnthropicText(data) || "No analysis provided.";
-      return { text, sources: [] };
+
+      const sources: Array<{ uri: string, title: string }> = [];
+      if (Array.isArray(data?.content)) {
+        data.content
+          .filter((block: any) => block?.type === 'web_search_tool_result' && Array.isArray(block.content))
+          .forEach((block: any) => {
+            block.content.forEach((result: any) => {
+              if (result?.url && result?.title) {
+                sources.push({ uri: result.url, title: result.title });
+              }
+            });
+          });
+      }
+
+      return { text, sources };
     } catch (e: any) {
       console.error("Anthropic Fact check failed", e);
       return { text: `Anthropic Fact check failed: ${e?.message || e || "Unknown error"}. Please check your Anthropic configuration in System Settings.`, sources: [] };
