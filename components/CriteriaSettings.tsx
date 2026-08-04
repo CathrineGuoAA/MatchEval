@@ -386,7 +386,14 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
                 </div>
               </div>
 
-              {/* Temperature Parameter Slider Box */}
+              {/* Newer Claude models manage sampling automatically and reject custom temperature values. */}
+              {provider === 'anthropic' ? (
+                <div className="pt-4 border-t border-gray-200">
+                  <div className="rounded-lg border border-indigo-100 bg-indigo-50 p-3 text-xs leading-normal text-indigo-800">
+                    Claude sampling is managed automatically. MatchEval will omit the deprecated temperature parameter for Anthropic requests.
+                  </div>
+                </div>
+              ) : (
               <div className="pt-4 border-t border-gray-200">
                 <div className="flex justify-between items-center mb-1">
                   <label className="block text-sm font-bold text-gray-950">
@@ -444,6 +451,7 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
                   </div>
                 </div>
               </div>
+              )}
             </div>
 
             {/* 2. Gemini Form */}

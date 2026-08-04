@@ -2329,7 +2329,12 @@ const App: React.FC = () => {
                           )}
                         </div>
 
-                        {/* Interactive LLM Temperature slider right in sidebar */}
+                        {/* Newer Claude models reject custom temperature values. */}
+                        {activeProvider === 'anthropic' ? (
+                          <div className="mb-4 rounded-lg border border-indigo-100 bg-indigo-50 p-3 text-xs leading-relaxed text-indigo-800">
+                            Claude sampling is managed automatically. MatchEval omits the deprecated temperature parameter for Anthropic evaluations.
+                          </div>
+                        ) : (
                         <div className="mb-4 bg-slate-50 p-3 rounded-lg border border-gray-200">
                           <div className="flex justify-between items-center mb-1.5">
                             <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">
@@ -2359,6 +2364,7 @@ const App: React.FC = () => {
                               : "Higher values introduce scoring variance."}
                           </p>
                         </div>
+                        )}
 
                         <div className="flex items-center gap-3 mb-4 p-3 bg-gray-50 rounded-lg border border-gray-100">
                            <input 

@@ -256,7 +256,6 @@ export const performFactCheck = async (conversation: Conversation): Promise<{ te
             { role: 'system', content: 'You are an objective Fact Verification Assistant.' },
             { role: 'user', content: prompt }
           ],
-          temperature: config.temperature,
         };
       } else {
         payload = {
@@ -266,7 +265,6 @@ export const performFactCheck = async (conversation: Conversation): Promise<{ te
           messages: [
             { role: 'user', content: prompt }
           ],
-          temperature: config.temperature,
         };
       }
 
@@ -510,7 +508,6 @@ Return ONLY a single valid JSON object. No markdown, no text outside the JSON.
           { role: 'user', content: prompt }
         ],
         response_format: { type: "json_object" },
-        temperature: config.temperature,
       };
     } else {
       payload = {
@@ -520,7 +517,6 @@ Return ONLY a single valid JSON object. No markdown, no text outside the JSON.
         messages: [
           { role: 'user', content: `${prompt}\n\nPlease respond with valid JSON only.` }
         ],
-        temperature: config.temperature,
       };
     }
 
@@ -701,7 +697,6 @@ export const generateSampleConversation = async (): Promise<Conversation> => {
           { role: 'user', content: `${basePrompt}\n\nIMPORTANT: Return ONLY a raw JSON array matching: [{"role": "user"|"model", "content": "..."}]` }
         ],
         response_format: { type: "json_object" },
-        temperature: config.temperature,
       };
     } else {
       payload = {
@@ -711,7 +706,6 @@ export const generateSampleConversation = async (): Promise<Conversation> => {
         messages: [
           { role: 'user', content: `${basePrompt}\n\nIMPORTANT: Return ONLY a raw JSON array. Do not put markdown blocks unless they contain exactly the JSON array.` }
         ],
-        temperature: config.temperature,
       };
     }
 
@@ -883,7 +877,6 @@ Reply with a strict JSON format structure:
         body: JSON.stringify({
           model: config.anthropicModel || 'claude-sonnet-5',
           max_tokens: 100,
-          temperature: 0,
           messages: [{ role: 'user', content: prompt }],
         }),
       });
