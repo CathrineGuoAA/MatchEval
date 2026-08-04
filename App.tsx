@@ -542,7 +542,9 @@ const App: React.FC = () => {
   };
 
   const handleBulkEvaluate = async (overrideIds?: string[]) => {
-    const idsToEvaluate = overrideIds || [...selectedIds];
+    // React click handlers receive a MouseEvent argument. Only accept an
+    // explicit override when it is genuinely an array of conversation IDs.
+    const idsToEvaluate = Array.isArray(overrideIds) ? overrideIds : [...selectedIds];
     if (idsToEvaluate.length === 0) return;
 
     const currentProvider = activeProvider;
@@ -560,7 +562,8 @@ const App: React.FC = () => {
     let completedCount = 0;
     let failedCount = 0;
 
-    for (const id of idsToEvaluate) {
+    try {
+      for (const id of idsToEvaluate) {
       if (cancelBulkRef.current) break;
 
       const conv = conversations.find(c => c.id === id);
@@ -610,13 +613,15 @@ const App: React.FC = () => {
           errorCount: failedCount
         } : null);
       }
+      }
+    } finally {
+      setIsEvaluating(false);
+      // Always release the bulk UI, including unexpected failures outside an individual request.
+      setBulkEvalProgress(prev => prev ? { ...prev, running: false } : null);
+      setTimeout(() => {
+        setBulkEvalProgress(null);
+      }, 3000);
     }
-
-    setIsEvaluating(false);
-    // Keep the progress showing for a short moment so they can see completion, then clear
-    setTimeout(() => {
-      setBulkEvalProgress(null);
-    }, 3000);
   };
 
   const handleAnalyzeAll = () => {
@@ -1656,7 +1661,7 @@ const App: React.FC = () => {
                       <Button 
                         variant="primary" 
                         size="sm"
-                        onClick={handleBulkEvaluate}
+                        onClick={() => { void handleBulkEvaluate(); }}
                         isLoading={isEvaluating}
                         className="bg-indigo-650 hover:bg-indigo-700 text-white font-bold flex items-center gap-1.5 shadow-xs"
                       >
