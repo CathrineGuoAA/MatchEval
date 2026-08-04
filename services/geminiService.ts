@@ -119,13 +119,20 @@ const extractAnthropicText = (data: any): string => {
 };
 
 /**
- * Sonnet 5 enables adaptive thinking by default. These calls need compact,
- * machine-readable output, so disable thinking to preserve the output budget.
+ * Sonnet 5 / Opus 5 enable adaptive thinking by default. Most of our calls
+ * (fact-check self-check, sample generation, classification) just need
+ * compact machine-readable output, so thinking is disabled for those to
+ * save cost/latency. evaluateConversation is the exception: its own system
+ * prompt requires mandatory chain-of-thought reasoning before scoring
+ * ("this reasoning step is mandatory - do not skip it"), so forcing
+ * thinking off there was fighting the prompt's own instructions and
+ * produced compressed, overly conservative scores. Pass
+ * `enableThinking: true` only for that call.
  */
-const getAnthropicThinkingConfig = (model: string): Record<string, any> =>
-  model === 'claude-sonnet-5' || model === 'claude-opus-5'
-    ? { thinking: { type: 'disabled' } }
-    : {};
+const getAnthropicThinkingConfig = (model: string, enableThinking = false): Record<string, any> => {
+  if (model !== 'claude-sonnet-5' && model !== 'claude-opus-5') return {};
+  return enableThinking ? { thinking: { type: 'adaptive' } } : { thinking: { type: 'disabled' } };
+};
 
 /**
  * Step 1: Verify facts using Google Search Grounding (Gemini) or LLM self-fact checking (OpenAI/Anthropic)
@@ -536,8 +543,8 @@ Return ONLY a single valid JSON object. No markdown, no text outside the JSON.
       const model = config.anthropicModel || 'claude-sonnet-5';
       payload = {
         model,
-        max_tokens: 4000,
-        ...getAnthropicThinkingConfig(model),
+        max_tokens: 8000,
+        ...getAnthropicThinkingConfig(model, true),
         system: systemInstruction,
         messages: [
           { role: 'user', content: `${prompt}\n\nPlease respond with valid JSON only.` }
