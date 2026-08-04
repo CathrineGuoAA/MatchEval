@@ -30,6 +30,7 @@ const App: React.FC = () => {
   const [currentConversation, setCurrentConversation] = useState<Conversation | null>(null);
   const [criteria, setCriteria] = useState<Criteria[]>(DEFAULT_CRITERIA);
   const [isEvaluating, setIsEvaluating] = useState(false);
+  const [evaluatingConversationId, setEvaluatingConversationId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   
   // Folders & View Mode States
@@ -1289,25 +1290,29 @@ const App: React.FC = () => {
 
   const handleEvaluate = async () => {
     if (!currentConversation) return;
+    const conversationToEvaluate = currentConversation;
     setIsEvaluating(true);
+    setEvaluatingConversationId(conversationToEvaluate.id);
     setError(null);
     try {
       let factCheckData = undefined;
       
       // Step 1: Run Fact Check if enabled
       if (enableFactCheck) {
-        factCheckData = await performFactCheck(currentConversation);
+        factCheckData = await performFactCheck(conversationToEvaluate);
       }
 
       // Step 2: Run Main Evaluation
-      const result = await evaluateConversation(currentConversation, criteria, factCheckData);
+      const result = await evaluateConversation(conversationToEvaluate, criteria, factCheckData);
       
-      const updatedConv = { ...currentConversation, evaluation: result };
-      updateConversationState(updatedConv);
+      const updatedConv = { ...conversationToEvaluate, evaluation: result };
+      setConversations(prev => prev.map(c => c.id === updatedConv.id ? updatedConv : c));
+      setCurrentConversation(curr => curr?.id === updatedConv.id ? updatedConv : curr);
     } catch (e: any) {
       setError(e?.message || "Evaluation failed. Please check your API key and try again.");
     } finally {
       setIsEvaluating(false);
+      setEvaluatingConversationId(null);
     }
   };
 
@@ -1584,6 +1589,17 @@ const App: React.FC = () => {
                   </div>
                   <label htmlFor="selectAll" className="text-sm font-bold text-gray-800 cursor-pointer">
                     Select All ({conversations.length})
+                  </label>
+
+                  <label className="inline-flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-xs font-bold text-sky-800 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={enableFactCheck}
+                      onChange={(e) => setEnableFactCheck(e.target.checked)}
+                      disabled={bulkEvalProgress?.running}
+                      className="h-4 w-4 rounded border-sky-300 text-sky-600 focus:ring-sky-500 disabled:cursor-not-allowed"
+                    />
+                    Online Fact Checking
                   </label>
 
                   {/* One-Key Analyze All Shortcut Button next to Select All */}
@@ -2387,7 +2403,7 @@ const App: React.FC = () => {
                         <Button 
                           className="w-full" 
                           onClick={handleEvaluate} 
-                          isLoading={isEvaluating}
+                          isLoading={evaluatingConversationId === currentConversation.id}
                           disabled={isEvaluating}
                         >
                           {currentConversation.evaluation ? 'Re-Evaluate Conversation' : 'Run Evaluation'}
