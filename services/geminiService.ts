@@ -29,7 +29,7 @@ export const getLLMConfig = (): LLMConfig => {
       openaiModel: 'gpt-4o-mini',
       openaiBaseUrl: '',
       anthropicKey: '',
-      anthropicModel: 'claude-3-5-sonnet-20241022',
+      anthropicModel: 'claude-sonnet-5',
       anthropicBaseUrl: '',
       temperature: 0,
     };
@@ -68,7 +68,7 @@ export const getLLMConfig = (): LLMConfig => {
     openaiModel: localStorage.getItem('evalai_openai_model') || 'gpt-4o-mini',
     openaiBaseUrl: localStorage.getItem('evalai_openai_base_url') || '',
     anthropicKey: sessionStorage.getItem('evalai_anthropic_api_key') || '',
-    anthropicModel: localStorage.getItem('evalai_anthropic_model') || 'claude-3-5-sonnet-20241022',
+    anthropicModel: localStorage.getItem('evalai_anthropic_model') || 'claude-sonnet-5',
     anthropicBaseUrl: localStorage.getItem('evalai_anthropic_base_url') || '',
     temperature: storedTemp !== null ? parseFloat(storedTemp) : 0,
   };
@@ -251,7 +251,7 @@ export const performFactCheck = async (conversation: Conversation): Promise<{ te
       let payload: any;
       if (config.anthropicBaseUrl && (config.anthropicBaseUrl.includes('openrouter') || config.anthropicBaseUrl.includes('openai'))) {
         payload = {
-          model: config.anthropicModel || 'claude-3-5-sonnet-20241022',
+          model: config.anthropicModel || 'claude-sonnet-5',
           messages: [
             { role: 'system', content: 'You are an objective Fact Verification Assistant.' },
             { role: 'user', content: prompt }
@@ -260,7 +260,7 @@ export const performFactCheck = async (conversation: Conversation): Promise<{ te
         };
       } else {
         payload = {
-          model: config.anthropicModel || 'claude-3-5-sonnet-20241022',
+          model: config.anthropicModel || 'claude-sonnet-5',
           max_tokens: 1500,
           system: 'You are an objective Fact Verification Assistant.',
           messages: [
@@ -504,7 +504,7 @@ Return ONLY a single valid JSON object. No markdown, no text outside the JSON.
     let payload: any;
     if (isOpenAiProxy) {
       payload = {
-        model: config.anthropicModel || 'claude-3-5-sonnet-20241022',
+        model: config.anthropicModel || 'claude-sonnet-5',
         messages: [
           { role: 'system', content: systemInstruction },
           { role: 'user', content: prompt }
@@ -514,7 +514,7 @@ Return ONLY a single valid JSON object. No markdown, no text outside the JSON.
       };
     } else {
       payload = {
-        model: config.anthropicModel || 'claude-3-5-sonnet-20241022',
+        model: config.anthropicModel || 'claude-sonnet-5',
         max_tokens: 4000,
         system: systemInstruction,
         messages: [
@@ -696,7 +696,7 @@ export const generateSampleConversation = async (): Promise<Conversation> => {
     let payload: any;
     if (isOpenAiProxy) {
       payload = {
-        model: config.anthropicModel || 'claude-3-5-sonnet-20241022',
+        model: config.anthropicModel || 'claude-sonnet-5',
         messages: [
           { role: 'user', content: `${basePrompt}\n\nIMPORTANT: Return ONLY a raw JSON array matching: [{"role": "user"|"model", "content": "..."}]` }
         ],
@@ -705,7 +705,7 @@ export const generateSampleConversation = async (): Promise<Conversation> => {
       };
     } else {
       payload = {
-        model: config.anthropicModel || 'claude-3-5-sonnet-20241022',
+        model: config.anthropicModel || 'claude-sonnet-5',
         max_tokens: 2500,
         system: "You are a helpful JSON data generator. Always output valid JSON only.",
         messages: [
@@ -881,7 +881,7 @@ Reply with a strict JSON format structure:
           'anthropic-dangerous-direct-browser-access': 'true',
         },
         body: JSON.stringify({
-          model: config.anthropicModel || 'claude-3-5-sonnet-20241022',
+          model: config.anthropicModel || 'claude-sonnet-5',
           max_tokens: 100,
           temperature: 0,
           messages: [{ role: 'user', content: prompt }],
