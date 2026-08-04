@@ -1047,6 +1047,10 @@ const App: React.FC = () => {
         const json = JSON.parse(textContent);
         if (Array.isArray(json)) {
           return json.map((item, idx) => convertJsonObjectToConversation(item, idx, fileName));
+        } else if (json && typeof json === 'object' && Array.isArray(json.conversations)) {
+          // Wrapper object shape, e.g. { _meta: {...}, conversations: [...] } -
+          // treat the conversations array the same as a top-level array.
+          return json.conversations.map((item: any, idx: number) => convertJsonObjectToConversation(item, idx, fileName));
         } else {
           return [convertJsonObjectToConversation(json, 0, fileName)];
         }
