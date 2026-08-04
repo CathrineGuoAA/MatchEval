@@ -244,6 +244,8 @@ export const performFactCheck = async (conversation: Conversation): Promise<{ te
       } else {
         headers['X-API-Key'] = config.anthropicKey;
         headers['anthropic-version'] = '2023-06-01';
+        // Anthropic blocks direct browser calls via CORS unless this is set.
+        headers['anthropic-dangerous-direct-browser-access'] = 'true';
       }
 
       let payload: any;
@@ -495,6 +497,8 @@ Return ONLY a single valid JSON object. No markdown, no text outside the JSON.
     } else {
       headers['X-API-Key'] = config.anthropicKey;
       headers['anthropic-version'] = '2023-06-01';
+      // Anthropic blocks direct browser calls via CORS unless this is set.
+      headers['anthropic-dangerous-direct-browser-access'] = 'true';
     }
 
     let payload: any;
@@ -685,6 +689,8 @@ export const generateSampleConversation = async (): Promise<Conversation> => {
     } else {
       headers['X-API-Key'] = config.anthropicKey;
       headers['anthropic-version'] = '2023-06-01';
+      // Anthropic blocks direct browser calls via CORS unless this is set.
+      headers['anthropic-dangerous-direct-browser-access'] = 'true';
     }
 
     let payload: any;
@@ -871,6 +877,8 @@ Reply with a strict JSON format structure:
           'content-type': 'application/json',
           'X-API-Key': config.anthropicKey,
           'anthropic-version': '2023-06-01',
+          // Anthropic blocks direct browser calls via CORS unless this is set.
+          'anthropic-dangerous-direct-browser-access': 'true',
         },
         body: JSON.stringify({
           model: config.anthropicModel || 'claude-3-5-sonnet-20241022',
