@@ -32,7 +32,7 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
   const [openaiBaseUrl, setOpenaiBaseUrl] = useState('');
   
   const [anthropicKey, setAnthropicKey] = useState('');
-  const [anthropicModel, setAnthropicModel] = useState('claude-3-5-sonnet-20241022');
+  const [anthropicModel, setAnthropicModel] = useState('claude-sonnet-5');
   const [anthropicBaseUrl, setAnthropicBaseUrl] = useState('');
 
   // Show/Hide Keys state
@@ -150,7 +150,7 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
         setHasOpenaiKey(false);
       } else if (target === 'anthropic') {
         setAnthropicKey('');
-        setAnthropicModel('claude-3-5-sonnet-20241022');
+        setAnthropicModel('claude-sonnet-5');
         setAnthropicBaseUrl('');
         setTemperature(0);
         
@@ -639,13 +639,13 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
                       type="text"
                       value={anthropicModel}
                       onChange={(e) => setAnthropicModel(e.target.value)}
-                      placeholder="claude-3-5-sonnet-20241022"
+                      placeholder="claude-sonnet-5"
                       className="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
                     />
                     <div className="mt-1.5 flex gap-2">
                       <span className="text-xs text-gray-400 font-semibold">Presets:</span>
-                      <button onClick={() => setAnthropicModel('claude-3-5-sonnet-20241022')} className="text-xs text-indigo-500 hover:underline">Sonnet 3.5</button>
-                      <button onClick={() => setAnthropicModel('claude-3-5-haiku-20241022')} className="text-xs text-indigo-500 hover:underline">Haiku 3.5</button>
+                      <button onClick={() => setAnthropicModel('claude-sonnet-5')} className="text-xs text-indigo-500 hover:underline">Sonnet 5</button>
+                      <button onClick={() => setAnthropicModel('claude-haiku-4-5-20251001')} className="text-xs text-indigo-500 hover:underline">Haiku 4.5</button>
                     </div>
                   </div>
 
