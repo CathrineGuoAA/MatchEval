@@ -19,7 +19,7 @@ const DEFAULT_CRITERIA: Criteria[] = [
   { id: 'c2', name: 'Trustworthiness', description: "How responsible and transparent the advice is about uncertainty, limits or sources." },
   { id: 'c3', name: 'Accuracy', description: "Whether verifiable facts, steps and figures are correct." },
   { id: 'c4', name: 'Understandable Language', description: "How concise, well-structured and easy to understand the wording is." },
-  { id: 'c5', name: 'Completeness / Match', description: "Whether it covers the essential needs and gives a concrete next step (e.g., contact/location/time/materials, ≥2 elements)." },
+  { id: 'c5', name: 'Completeness / Match', description: "Whether the user's specific original question was actually resolved, not just handed off. Listing contact info (phone/location/hours/materials, ≥2 elements) is necessary but NOT sufficient on its own — a referral that leaves the user's specific ask (e.g. a price, an eligibility answer, which option to pick) for someone else to answer later should score no higher than 5-6, even if every contact detail is present. Score 8-10 only when the response itself gives the specific thing the user asked for, or the next step is something the user can complete themselves without needing another person to resolve the original question first." },
   { id: 'c6', name: 'Helpfulness / Task Progress', description: "Whether the AI meaningfully moved the user closer to their goal. If the AI ONLY asked for clarification without offering any partial answer, suggestion, or alternative value, score 2–3 at most. Repeated clarification loops with no progress should score 1–2." }
 ];
 
