@@ -561,59 +561,79 @@ const App: React.FC = () => {
 
     let completedCount = 0;
     let failedCount = 0;
+    // Each conversation makes up to 3 sequential LLM calls (fact-check,
+    // score, classify), and fact-check now does a real web search - all
+    // slower than before but more accurate. Running conversations
+    // concurrently instead of one-at-a-time is what actually keeps bulk
+    // runs fast; kept modest to stay under typical per-minute rate limits
+    // (worst case ~3x this many calls in flight at once).
+    const BULK_CONCURRENCY = 3;
 
     try {
-      for (const id of idsToEvaluate) {
-      if (cancelBulkRef.current) break;
+      let cursor = 0;
 
-      const conv = conversations.find(c => c.id === id);
-      if (!conv) {
-        completedCount++;
-        setBulkEvalProgress(prev => prev ? { ...prev, current: completedCount } : null);
-        continue;
-      }
-
-      try {
-        let factCheckData = undefined;
-        if (enableFactCheck) {
-          try {
-            factCheckData = await performFactCheck(conv);
-          } catch (fcErr) {
-            console.warn("Fact check failed for conversation", id, fcErr);
-          }
+      const processOne = async (id: string) => {
+        const conv = conversations.find(c => c.id === id);
+        if (!conv) {
+          completedCount++;
+          setBulkEvalProgress(prev => prev ? { ...prev, current: completedCount } : null);
+          return;
         }
 
-        // Run evaluation
-        const evaluation = await evaluateConversation(conv, criteria, factCheckData);
-
-        // Also classify it
-        let category = conv.category;
         try {
-          category = await classifyConversation(conv);
-        } catch (catErr) {
-          console.warn("Classification failed for conversation", id, catErr);
+          let factCheckData = undefined;
+          if (enableFactCheck) {
+            try {
+              factCheckData = await performFactCheck(conv);
+            } catch (fcErr) {
+              console.warn("Fact check failed for conversation", id, fcErr);
+            }
+          }
+
+          // Run evaluation
+          const evaluation = await evaluateConversation(conv, criteria, factCheckData);
+
+          // Also classify it
+          let category = conv.category;
+          try {
+            category = await classifyConversation(conv);
+          } catch (catErr) {
+            console.warn("Classification failed for conversation", id, catErr);
+          }
+
+          const updatedConv: Conversation = { ...conv, evaluation, category };
+
+          // Update list states
+          setConversations(prev => prev.map(c => c.id === id ? updatedConv : c));
+
+          // Update current viewing conversation if matched
+          setCurrentConversation(curr => curr && curr.id === id ? updatedConv : curr);
+
+        } catch (err: any) {
+          console.error(`Failed to evaluate conversation ${id}:`, err);
+          failedCount++;
+        } finally {
+          completedCount++;
+          setBulkEvalProgress(prev => prev ? {
+            ...prev,
+            current: completedCount,
+            errorCount: failedCount
+          } : null);
         }
+      };
 
-        const updatedConv: Conversation = { ...conv, evaluation, category };
+      const worker = async () => {
+        while (cursor < idsToEvaluate.length) {
+          if (cancelBulkRef.current) return;
+          const id = idsToEvaluate[cursor];
+          cursor++;
+          await processOne(id);
+        }
+      };
 
-        // Update list states
-        setConversations(prev => prev.map(c => c.id === id ? updatedConv : c));
-        
-        // Update current viewing conversation if matched
-        setCurrentConversation(curr => curr && curr.id === id ? updatedConv : curr);
-
-      } catch (err: any) {
-        console.error(`Failed to evaluate conversation ${id}:`, err);
-        failedCount++;
-      } finally {
-        completedCount++;
-        setBulkEvalProgress(prev => prev ? {
-          ...prev,
-          current: completedCount,
-          errorCount: failedCount
-        } : null);
-      }
-      }
+      await Promise.all(
+        Array.from({ length: Math.min(BULK_CONCURRENCY, idsToEvaluate.length) }, () => worker())
+      );
     } finally {
       setIsEvaluating(false);
       // Always release the bulk UI, including unexpected failures outside an individual request.

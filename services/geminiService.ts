@@ -105,6 +105,39 @@ const getAI = (): GoogleGenAI => {
 };
 
 /**
+ * Raw fetch() has no retry logic, unlike the official SDKs (which retry
+ * 429/5xx/overload errors with backoff by default). Every provider call in
+ * this file goes through fetch() directly, so a transient 429 (rate limit)
+ * or 529 (Anthropic overloaded_error) surfaced straight to the user as a
+ * hard failure instead of quietly succeeding on retry. This wraps fetch()
+ * with the same retry behavior the SDKs give you for free.
+ */
+const RETRYABLE_STATUS_CODES = new Set([408, 409, 429, 500, 502, 503, 504, 529]);
+
+const fetchWithRetry = async (url: string, options: RequestInit, maxRetries = 2): Promise<Response> => {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, options);
+      if (response.ok || !RETRYABLE_STATUS_CODES.has(response.status) || attempt === maxRetries) {
+        return response;
+      }
+      lastError = new Error(`Retryable status ${response.status}`);
+    } catch (err) {
+      // Network-level failure (e.g. connection reset) - also retryable.
+      lastError = err;
+      if (attempt === maxRetries) throw err;
+    }
+    // Exponential backoff with jitter: ~500ms, ~1000ms, ...
+    const delayMs = 500 * Math.pow(2, attempt) + Math.random() * 250;
+    await new Promise(resolve => setTimeout(resolve, delayMs));
+  }
+  // Unreachable in practice (the loop always returns or throws above), but
+  // keeps TypeScript happy about the function's return type.
+  throw lastError;
+};
+
+/**
  * Claude may return thinking blocks before the final text block. Read every
  * text block instead of assuming content[0] contains the answer.
  */
@@ -233,7 +266,7 @@ export const performFactCheck = async (conversation: Conversation): Promise<{ te
         ? `${config.openaiBaseUrl.replace(/\/$/, '')}/chat/completions` 
         : 'https://api.openai.com/v1/chat/completions';
 
-      const response = await fetch(endpoint, {
+      const response = await fetchWithRetry(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -325,7 +358,7 @@ export const performFactCheck = async (conversation: Conversation): Promise<{ te
         };
       }
 
-      const response = await fetch(endpoint, {
+      const response = await fetchWithRetry(endpoint, {
         method: 'POST',
         headers,
         body: JSON.stringify(payload)
@@ -508,7 +541,7 @@ Return ONLY a single valid JSON object. No markdown, no text outside the JSON.
       ? `${config.openaiBaseUrl.replace(/\/$/, '')}/chat/completions` 
       : 'https://api.openai.com/v1/chat/completions';
 
-    const response = await fetch(endpoint, {
+    const response = await fetchWithRetry(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -589,7 +622,7 @@ Return ONLY a single valid JSON object. No markdown, no text outside the JSON.
       };
     }
 
-    const response = await fetch(endpoint, {
+    const response = await fetchWithRetry(endpoint, {
       method: 'POST',
       headers,
       body: JSON.stringify(payload)
@@ -675,7 +708,7 @@ export const generateSampleConversation = async (): Promise<Conversation> => {
       ? `${config.openaiBaseUrl.replace(/\/$/, '')}/chat/completions` 
       : 'https://api.openai.com/v1/chat/completions';
 
-    const response = await fetch(endpoint, {
+    const response = await fetchWithRetry(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -775,7 +808,7 @@ export const generateSampleConversation = async (): Promise<Conversation> => {
       };
     }
 
-    const response = await fetch(endpoint, {
+    const response = await fetchWithRetry(endpoint, {
       method: 'POST',
       headers,
       body: JSON.stringify(payload)
@@ -903,7 +936,7 @@ Reply with a strict JSON format structure:
       const endpoint = config.openaiBaseUrl
         ? `${config.openaiBaseUrl.replace(/\/$/, '')}/chat/completions`
         : 'https://api.openai.com/v1/chat/completions';
-      const response = await fetch(endpoint, {
+      const response = await fetchWithRetry(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -926,7 +959,7 @@ Reply with a strict JSON format structure:
       const endpoint = config.anthropicBaseUrl
         ? `${config.anthropicBaseUrl.replace(/\/$/, '')}/messages`
         : 'https://api.anthropic.com/v1/messages';
-      const response = await fetch(endpoint, {
+      const response = await fetchWithRetry(endpoint, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
