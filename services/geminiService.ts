@@ -262,9 +262,13 @@ export const performFactCheck = async (conversation: Conversation): Promise<{ te
       if (!config.openaiKey) {
         return { text: "OpenAI API Key is missing. Cannot perform fact check.", sources: [] };
       }
-      const endpoint = config.openaiBaseUrl 
-        ? `${config.openaiBaseUrl.replace(/\/$/, '')}/chat/completions` 
-        : 'https://api.openai.com/v1/chat/completions';
+      // Chat Completions has no real internet access - this was a pure
+      // self-check against training knowledge, same gap the Anthropic path
+      // had. The Responses API's web_search tool gives it real-time lookup,
+      // matching what Gemini already does via Google Search Grounding.
+      const endpoint = config.openaiBaseUrl
+        ? `${config.openaiBaseUrl.replace(/\/$/, '')}/responses`
+        : 'https://api.openai.com/v1/responses';
 
       const response = await fetchWithRetry(endpoint, {
         method: 'POST',
@@ -274,11 +278,9 @@ export const performFactCheck = async (conversation: Conversation): Promise<{ te
         },
         body: JSON.stringify({
           model: config.openaiModel || 'gpt-4o-mini',
-          messages: [
-            { role: 'system', content: 'You are an objective Fact Verification Assistant.' },
-            { role: 'user', content: prompt }
-          ],
-          temperature: config.temperature,
+          instructions: 'You are an objective Fact Verification Assistant. Use the web_search tool to look up specific claims (phone numbers, addresses, organization names, eligibility rules) instead of relying only on what you recall - only flag something as unverifiable if a search does not turn it up.',
+          input: prompt,
+          tools: [{ type: 'web_search' }],
         })
       });
 
@@ -299,8 +301,23 @@ export const performFactCheck = async (conversation: Conversation): Promise<{ te
         throw new Error(errSnippet);
       }
       const data = await response.json();
-      const text = data.choices?.[0]?.message?.content || "No analysis provided.";
-      return { text, sources: [] };
+
+      const messageItems = Array.isArray(data?.output) ? data.output.filter((item: any) => item?.type === 'message') : [];
+      const textBlocks = messageItems.flatMap((item: any) =>
+        Array.isArray(item.content) ? item.content.filter((c: any) => c?.type === 'output_text') : []
+      );
+      const text = textBlocks.map((b: any) => b.text).join('\n').trim() || "No analysis provided.";
+
+      const sources: Array<{ uri: string, title: string }> = [];
+      textBlocks.forEach((b: any) => {
+        (b.annotations || []).forEach((a: any) => {
+          if (a?.type === 'url_citation' && a.url) {
+            sources.push({ uri: a.url, title: a.title || a.url });
+          }
+        });
+      });
+
+      return { text, sources };
     } catch (e: any) {
       console.error("OpenAI Fact check failed", e);
       return { text: `OpenAI Fact check failed: ${e?.message || e || "Unknown error"}. Please check your OpenAI configuration in System Settings.`, sources: [] };
