@@ -206,20 +206,20 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
     <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-300">
       
       {/* Settings Navigation Tabs */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-200 pb-5 gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-200 dark:border-slate-700 pb-5 gap-4">
         <div>
-          <h2 className="text-3xl font-black text-gray-900 tracking-tight">System Settings</h2>
-          <p className="text-gray-500 text-sm mt-1">Configure evaluation metrics and LLM endpoint credentials.</p>
+          <h2 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">System Settings</h2>
+          <p className="text-gray-500 dark:text-slate-400 text-sm mt-1">Configure evaluation metrics and LLM endpoint credentials.</p>
         </div>
         
         {/* Tab Controls */}
-        <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200 self-stretch sm:self-auto">
+        <div className="flex bg-gray-100 dark:bg-slate-700 p-1 rounded-lg border border-gray-200 dark:border-slate-700 self-stretch sm:self-auto">
           <button
             onClick={() => setActiveTab('metrics')}
             className={`flex-1 sm:flex-initial px-4 py-1.5 text-xs font-bold rounded-md transition-all ${
               activeTab === 'metrics'
-                ? 'bg-white text-indigo-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
+                ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-blue-400 shadow-sm'
+                : 'text-gray-600 dark:text-slate-300 hover:text-gray-900'
             }`}
           >
             Metrics Core
@@ -228,8 +228,8 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
             onClick={() => setActiveTab('apiKeys')}
             className={`flex-1 sm:flex-initial px-4 py-1.5 text-xs font-bold rounded-md transition-all ${
               activeTab === 'apiKeys'
-                ? 'bg-white text-indigo-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
+                ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-blue-400 shadow-sm'
+                : 'text-gray-600 dark:text-slate-300 hover:text-gray-900'
             }`}
           >
             Model & API Keys
@@ -240,10 +240,10 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
       {/* TAB 1: G-EVAL CRITERIA */}
       {activeTab === 'metrics' && (
         <div className="space-y-6 animate-in fade-in duration-200">
-          <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+          <div className="flex justify-between items-center bg-white dark:bg-slate-800 p-4 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm">
             <div>
-              <h3 className="font-bold text-gray-900">Custom Evaluation Criteria</h3>
-              <p className="text-xs text-gray-500">Edit metrics below. Changes save automatically when clicking out of field.</p>
+              <h3 className="font-bold text-gray-900 dark:text-white">Custom Evaluation Criteria</h3>
+              <p className="text-xs text-gray-500 dark:text-slate-400">Edit metrics below. Changes save automatically when clicking out of field.</p>
             </div>
             <Button variant="secondary" size="sm" onClick={() => { onReset(); setLocalCriteria([]); }}>
                Restore Defaults
@@ -252,18 +252,18 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
 
           <div className="space-y-4">
             {localCriteria.map((c) => (
-              <div key={c.id} className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:border-indigo-200 transition-colors">
+              <div key={c.id} className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm hover:border-indigo-200 transition-colors">
                 <div className="flex justify-between items-start mb-3 gap-4">
                   <input
                     type="text"
                     value={c.name}
                     onChange={(e) => handleUpdateMetric(c.id, { name: e.target.value })}
                     onBlur={handleBlurSave}
-                    className="font-bold text-base text-gray-900 border-none focus:ring-0 p-0 hover:bg-gray-50 rounded w-full bg-transparent"
+                    className="font-bold text-base text-gray-900 dark:text-white border-none focus:ring-0 p-0 hover:bg-gray-50 rounded w-full bg-transparent"
                   />
                   <button 
                     onClick={() => handleDeleteMetric(c.id)}
-                    className="text-gray-400 hover:text-red-500 p-1.5 rounded transition-colors"
+                    className="text-gray-400 dark:text-slate-500 hover:text-red-500 p-1.5 rounded transition-colors"
                     title="Remove Metric"
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
@@ -274,7 +274,7 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
                   onChange={(e) => handleUpdateMetric(c.id, { description: e.target.value })}
                   onBlur={handleBlurSave}
                   rows={2}
-                  className="w-full text-gray-600 text-sm border-gray-100 focus:border-indigo-300 focus:ring-indigo-100 rounded-lg bg-gray-50 p-3"
+                  className="w-full text-gray-600 dark:text-slate-300 text-sm border-gray-100 dark:border-slate-700 focus:border-indigo-300 focus:ring-indigo-100 rounded-lg bg-gray-50 dark:bg-slate-800 p-3"
                   placeholder="Define G-Eval criteria rubric instructions for the models..."
                 />
               </div>
@@ -282,22 +282,22 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
           </div>
 
           {/* New Metric */}
-          <div className="bg-gradient-to-r from-gray-50 to-indigo-50/20 rounded-xl p-5 border border-indigo-100 shadow-sm">
-            <h3 className="font-bold text-sm text-indigo-900 mb-3">Add Custom Judge Criteria</h3>
+          <div className="bg-gradient-to-r from-gray-50 to-indigo-50/20 rounded-xl p-5 border border-indigo-100 dark:border-primary/30 shadow-sm">
+            <h3 className="font-bold text-sm text-indigo-900 dark:text-blue-200 mb-3">Add Custom Judge Criteria</h3>
             <div className="flex flex-col md:flex-row gap-3 items-stretch">
               <input
                 type="text"
                 placeholder="Metric Name (e.g., Creativity)"
                 value={newMetricName}
                 onChange={(e) => setNewMetricName(e.target.value)}
-                className="rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm md:w-1/4"
+                className="rounded-lg border-gray-300 dark:border-slate-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm md:w-1/4"
               />
               <input
                 type="text"
                 placeholder="G-Eval Instruction Rubric (e.g., Does the response provide unique, detailed analogies?)"
                 value={newMetricDesc}
                 onChange={(e) => setNewMetricDesc(e.target.value)}
-                className="flex-1 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                className="flex-1 rounded-lg border-gray-300 dark:border-slate-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
               />
               <Button onClick={handleAddMetric} disabled={!newMetricName || !newMetricDesc}>
                 Add Metric
@@ -312,56 +312,56 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
         <div className="space-y-6 animate-in fade-in duration-200">
           
           {/* Privacy Safeguard Info Banner */}
-          <div className="bg-indigo-50/55 border border-indigo-200/70 rounded-xl p-4 flex gap-3.5 items-start shadow-2xs animate-in slide-in-from-top-2 duration-300">
-            <div className="p-2 rounded-lg bg-indigo-100 text-indigo-600 flex-shrink-0">
+          <div className="bg-indigo-50 dark:bg-primary/15/55 border border-indigo-200 dark:border-primary/40/70 rounded-xl p-4 flex gap-3.5 items-start shadow-2xs animate-in slide-in-from-top-2 duration-300">
+            <div className="p-2 rounded-lg bg-indigo-100 text-indigo-600 dark:text-blue-400 flex-shrink-0">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="animate-pulse">
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
               </svg>
             </div>
             <div className="space-y-1">
-              <h4 className="text-xs font-black text-indigo-950 uppercase tracking-widest leading-none">Privacy-by-Design Safeguard</h4>
-              <p className="text-xs text-indigo-900 leading-relaxed font-semibold">
+              <h4 className="text-xs font-black text-indigo-950 dark:text-blue-100 uppercase tracking-widest leading-none">Privacy-by-Design Safeguard</h4>
+              <p className="text-xs text-indigo-900 dark:text-blue-200 leading-relaxed font-semibold">
                 To guarantee absolute confidentiality, your API keys are loaded and stored <span className="underline decoration-indigo-300 font-bold decoration-2">only in this browser tab's RAM memory (sessionStorage)</span>.
               </p>
-              <p className="text-[11px] text-indigo-700/90 leading-relaxed">
+              <p className="text-[11px] text-indigo-700 dark:text-blue-300/90 leading-relaxed">
                 They are never written permanently to persistent device storage (localStorage) or sent to remote cloud databases, and are instantly wiped from memory as soon as you close or refresh this browser tab. You will be requested to provide them again on each new session.
               </p>
             </div>
           </div>
           
           {/* Key status indicators bar */}
-          <div className="bg-white p-4 rounded-xl border border-gray-200 flex flex-wrap gap-4 items-center justify-between shadow-sm">
-            <span className="text-sm font-bold text-gray-500">Stored Credentials:</span>
+          <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-gray-200 dark:border-slate-700 flex flex-wrap gap-4 items-center justify-between shadow-sm">
+            <span className="text-sm font-bold text-gray-500 dark:text-slate-400">Stored Credentials:</span>
             <div className="flex gap-3">
-              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold leading-none ${hasGeminiKey ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-400'}`}>
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold leading-none ${hasGeminiKey ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 dark:bg-slate-700 text-gray-400 dark:text-slate-500'}`}>
                 <span className={`w-1.5 h-1.5 rounded-full ${hasGeminiKey ? 'bg-emerald-500' : 'bg-gray-400'}`} />
                 Gemini
               </span>
-              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold leading-none ${hasOpenaiKey ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-400'}`}>
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold leading-none ${hasOpenaiKey ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 dark:bg-slate-700 text-gray-400 dark:text-slate-500'}`}>
                 <span className={`w-1.5 h-1.5 rounded-full ${hasOpenaiKey ? 'bg-emerald-500' : 'bg-gray-400'}`} />
                 OpenAI GPT
               </span>
-              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold leading-none ${hasAnthropicKey ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-400'}`}>
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold leading-none ${hasAnthropicKey ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 dark:bg-slate-700 text-gray-400 dark:text-slate-500'}`}>
                 <span className={`w-1.5 h-1.5 rounded-full ${hasAnthropicKey ? 'bg-emerald-500' : 'bg-gray-400'}`} />
                 Claude
               </span>
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm divide-y divide-gray-200">
+          <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm divide-y divide-gray-200 dark:divide-slate-700">
             {/* 1. Global Judge Selector */}
-            <div className="p-6 space-y-5 bg-slate-50/50 rounded-t-xl">
+            <div className="p-6 space-y-5 bg-slate-50 dark:bg-slate-900/60/50 rounded-t-xl">
               <div>
-                <label className="block text-sm font-bold text-gray-900 mb-1">Active Judge Engine Provider</label>
-                <p className="text-xs text-gray-500 mb-3">All prompt evaluation runs and sample generation triggers will route through this provider.</p>
+                <label className="block text-sm font-bold text-gray-900 dark:text-white mb-1">Active Judge Engine Provider</label>
+                <p className="text-xs text-gray-500 dark:text-slate-400 mb-3">All prompt evaluation runs and sample generation triggers will route through this provider.</p>
                 <div className="grid grid-cols-3 gap-3">
                   <button
                     onClick={() => setProvider('gemini')}
                     className={`py-3 px-4 rounded-xl border-2 text-center transition-all ${
                       provider === 'gemini'
-                        ? 'border-indigo-600 bg-indigo-50/30 text-indigo-700 font-bold'
-                        : 'border-gray-200 bg-white hover:border-gray-300 text-gray-600'
+                        ? 'border-indigo-600 bg-indigo-50 dark:bg-primary/15/30 text-indigo-700 dark:text-blue-300 font-bold'
+                        : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-gray-300 text-gray-600 dark:text-slate-300'
                     }`}
                   >
                     Google Gemini
@@ -370,8 +370,8 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
                     onClick={() => setProvider('openai')}
                     className={`py-3 px-4 rounded-xl border-2 text-center transition-all ${
                       provider === 'openai'
-                        ? 'border-indigo-600 bg-indigo-50/30 text-indigo-700 font-bold'
-                        : 'border-gray-200 bg-white hover:border-gray-300 text-gray-600'
+                        ? 'border-indigo-600 bg-indigo-50 dark:bg-primary/15/30 text-indigo-700 dark:text-blue-300 font-bold'
+                        : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-gray-300 text-gray-600 dark:text-slate-300'
                     }`}
                   >
                     OpenAI GPT
@@ -380,8 +380,8 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
                     onClick={() => setProvider('anthropic')}
                     className={`py-3 px-4 rounded-xl border-2 text-center transition-all ${
                       provider === 'anthropic'
-                        ? 'border-indigo-600 bg-indigo-50/30 text-indigo-700 font-bold'
-                        : 'border-gray-200 bg-white hover:border-gray-300 text-gray-600'
+                        ? 'border-indigo-600 bg-indigo-50 dark:bg-primary/15/30 text-indigo-700 dark:text-blue-300 font-bold'
+                        : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-gray-300 text-gray-600 dark:text-slate-300'
                     }`}
                   >
                     Anthropic Claude
@@ -391,15 +391,15 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
 
               {/* Newer Claude models manage sampling automatically and reject custom temperature values. */}
               {provider === 'anthropic' ? (
-                <div className="pt-4 border-t border-gray-200">
-                  <div className="rounded-lg border border-indigo-100 bg-indigo-50 p-3 text-xs leading-normal text-indigo-800">
+                <div className="pt-4 border-t border-gray-200 dark:border-slate-700">
+                  <div className="rounded-lg border border-indigo-100 dark:border-primary/30 bg-indigo-50 dark:bg-primary/15 p-3 text-xs leading-normal text-indigo-800">
                     Claude sampling is managed automatically. MatchEval will omit the deprecated temperature parameter for Anthropic requests.
                   </div>
                 </div>
               ) : (
-              <div className="pt-4 border-t border-gray-200">
+              <div className="pt-4 border-t border-gray-200 dark:border-slate-700">
                 <div className="flex justify-between items-center mb-1">
-                  <label className="block text-sm font-bold text-gray-950">
+                  <label className="block text-sm font-bold text-gray-950 dark:text-white">
                     Model Temperature: <span className="text-indigo-650 font-extrabold">{temperature.toFixed(1)}</span>
                   </label>
                   <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full border ${
@@ -412,12 +412,12 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
                     {temperature === 0 ? 'Deterministic (Judge Recommended)' : temperature >= 0.7 ? 'Creative / Diverse' : 'Balanced'}
                   </span>
                 </div>
-                <p className="text-xs text-gray-500 mb-4">
+                <p className="text-xs text-gray-500 dark:text-slate-400 mb-4">
                   Controls prediction randomness. For quantitative LLM-as-a-judge evaluations, a temperature of <strong>0.0</strong> guarantees high precision, reproducibility, and consistency.
                 </p>
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
                   <div className="flex-1 flex items-center gap-3">
-                    <span className="text-xs text-gray-400 font-mono">0.0</span>
+                    <span className="text-xs text-gray-400 dark:text-slate-500 font-mono">0.0</span>
                     <input
                       type="range"
                       min="0"
@@ -425,29 +425,29 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
                       step="0.1"
                       value={temperature}
                       onChange={(e) => setTemperature(parseFloat(e.target.value))}
-                      className="flex-1 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                      className="flex-1 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-600"
                     />
-                    <span className="text-xs text-gray-400 font-mono">1.0</span>
+                    <span className="text-xs text-gray-400 dark:text-slate-500 font-mono">1.0</span>
                   </div>
                   <div className="flex gap-1">
                     <button
                       type="button"
                       onClick={() => setTemperature(0)}
-                      className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-colors ${temperature === 0 ? 'bg-indigo-650 border-indigo-650 text-white shadow-sm' : 'bg-white border-gray-250 text-gray-700 hover:bg-gray-50'}`}
+                      className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-colors ${temperature === 0 ? 'bg-indigo-650 border-indigo-650 text-white shadow-sm' : 'bg-white dark:bg-slate-800 border-gray-250 dark:border-slate-600 text-gray-700 dark:text-slate-300 hover:bg-gray-50'}`}
                     >
                       0.0 (Judge)
                     </button>
                     <button
                       type="button"
                       onClick={() => setTemperature(0.5)}
-                      className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-colors ${temperature === 0.5 ? 'bg-indigo-650 border-indigo-650 text-white shadow-sm' : 'bg-white border-gray-250 text-gray-700 hover:bg-gray-50'}`}
+                      className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-colors ${temperature === 0.5 ? 'bg-indigo-650 border-indigo-650 text-white shadow-sm' : 'bg-white dark:bg-slate-800 border-gray-250 dark:border-slate-600 text-gray-700 dark:text-slate-300 hover:bg-gray-50'}`}
                     >
                       0.5
                     </button>
                     <button
                       type="button"
                       onClick={() => setTemperature(0.7)}
-                      className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-colors ${temperature === 0.7 ? 'bg-indigo-650 border-indigo-650 text-white shadow-sm' : 'bg-white border-gray-250 text-gray-700 hover:bg-gray-50'}`}
+                      className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-colors ${temperature === 0.7 ? 'bg-indigo-650 border-indigo-650 text-white shadow-sm' : 'bg-white dark:bg-slate-800 border-gray-250 dark:border-slate-600 text-gray-700 dark:text-slate-300 hover:bg-gray-50'}`}
                     >
                       0.7
                     </button>
@@ -461,7 +461,7 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
             {provider === 'gemini' && (
               <div className="p-6 space-y-4 animate-in fade-in duration-150">
                 <div className="flex justify-between items-center">
-                  <h4 className="font-extrabold text-gray-900">Google Gemini Configuration</h4>
+                  <h4 className="font-extrabold text-gray-900 dark:text-white">Google Gemini Configuration</h4>
                   <button
                     onClick={() => handleClearAPIConfig('gemini')}
                     className="text-xs text-red-500 hover:underline font-semibold"
@@ -473,19 +473,19 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* API Key */}
                   <div className="md:col-span-2">
-                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">API Key</label>
+                    <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1">API Key</label>
                     <div className="relative">
                       <input
                         type={showGeminiKey ? 'text' : 'password'}
                         value={geminiKey}
                         onChange={(e) => setGeminiKey(e.target.value)}
                         placeholder="AIzaSy..."
-                        className="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm pr-10"
+                        className="w-full rounded-lg border-gray-300 dark:border-slate-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm pr-10"
                       />
                       <button
                         type="button"
                         onClick={() => setShowGeminiKey(!showGeminiKey)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500 hover:text-gray-600 text-xs"
                       >
                         {showGeminiKey ? 'Hide' : 'Show'}
                       </button>
@@ -494,16 +494,16 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
 
                   {/* Model */}
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Model Name</label>
+                    <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1">Model Name</label>
                     <input
                       type="text"
                       value={geminiModel}
                       onChange={(e) => setGeminiModel(e.target.value)}
                       placeholder="gemini-2.5-flash"
-                      className="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                      className="w-full rounded-lg border-gray-300 dark:border-slate-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
                     />
                     <div className="mt-1.5 flex gap-2">
-                      <span className="text-xs text-gray-400 font-semibold">Presets:</span>
+                      <span className="text-xs text-gray-400 dark:text-slate-500 font-semibold">Presets:</span>
                       <button onClick={() => setGeminiModel('gemini-2.5-flash')} className="text-xs text-indigo-500 hover:underline font-bold">2.5 Flash</button>
                       <button onClick={() => setGeminiModel('gemini-2.5-pro')} className="text-xs text-indigo-500 hover:underline">2.5 Pro</button>
                       <button onClick={() => setGeminiModel('gemini-1.5-flash')} className="text-xs text-indigo-500 hover:underline">1.5 Flash</button>
@@ -512,18 +512,18 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
 
                   {/* Custom Base URL */}
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Custom API Endpoint (Optional proxy)</label>
+                    <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1">Custom API Endpoint (Optional proxy)</label>
                     <input
                       type="text"
                       value={geminiBaseUrl}
                       onChange={(e) => setGeminiBaseUrl(e.target.value)}
                       placeholder="https://generativelanguage.googleapis.com (default)"
-                      className="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                      className="w-full rounded-lg border-gray-300 dark:border-slate-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
                     />
                   </div>
                 </div>
 
-                <div className="mt-2 bg-indigo-50 border border-indigo-100 p-3 rounded-lg flex items-start gap-2.5 text-xs text-indigo-800 leading-normal">
+                <div className="mt-2 bg-indigo-50 dark:bg-primary/15 border border-indigo-100 dark:border-primary/30 p-3 rounded-lg flex items-start gap-2.5 text-xs text-indigo-800 leading-normal">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="mt-0.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
                   <span>Google Search Grounding fact-checking is natively supported when using compatible Gemini models.</span>
                 </div>
@@ -534,7 +534,7 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
             {provider === 'openai' && (
               <div className="p-6 space-y-4 animate-in fade-in duration-150">
                 <div className="flex justify-between items-center">
-                  <h4 className="font-extrabold text-gray-900 font-sans">OpenAI GPT Configuration</h4>
+                  <h4 className="font-extrabold text-gray-900 dark:text-white font-sans">OpenAI GPT Configuration</h4>
                   <button
                     onClick={() => handleClearAPIConfig('openai')}
                     className="text-xs text-red-500 hover:underline font-semibold"
@@ -546,19 +546,19 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* API Key */}
                   <div className="md:col-span-2">
-                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">OpenAI API Key</label>
+                    <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1">OpenAI API Key</label>
                     <div className="relative">
                       <input
                         type={showOpenaiKey ? 'text' : 'password'}
                         value={openaiKey}
                         onChange={(e) => setOpenaiKey(e.target.value)}
                         placeholder="sk-or-lh-..."
-                        className="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm pr-10"
+                        className="w-full rounded-lg border-gray-300 dark:border-slate-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm pr-10"
                       />
                       <button
                         type="button"
                         onClick={() => setShowOpenaiKey(!showOpenaiKey)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500 hover:text-gray-600 text-xs"
                       >
                         {showOpenaiKey ? 'Hide' : 'Show'}
                       </button>
@@ -567,16 +567,16 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
 
                   {/* Model */}
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Model Tag</label>
+                    <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1">Model Tag</label>
                     <input
                       type="text"
                       value={openaiModel}
                       onChange={(e) => setOpenaiModel(e.target.value)}
                       placeholder="gpt-4o-mini"
-                      className="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                      className="w-full rounded-lg border-gray-300 dark:border-slate-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
                     />
                     <div className="mt-1.5 flex gap-2">
-                      <span className="text-xs text-gray-400 font-semibold">Presets:</span>
+                      <span className="text-xs text-gray-400 dark:text-slate-500 font-semibold">Presets:</span>
                       <button onClick={() => setOpenaiModel('gpt-4o-mini')} className="text-xs text-indigo-500 hover:underline">gpt-4o-mini</button>
                       <button onClick={() => setOpenaiModel('gpt-4o')} className="text-xs text-indigo-500 hover:underline">gpt-4o</button>
                       <button onClick={() => setOpenaiModel('o1-mini')} className="text-xs text-indigo-500 hover:underline">o1-mini</button>
@@ -585,16 +585,16 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
 
                   {/* Base URL */}
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">API Base URL (Proxy/Alternative Gateway)</label>
+                    <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1">API Base URL (Proxy/Alternative Gateway)</label>
                     <input
                       type="text"
                       value={openaiBaseUrl}
                       onChange={(e) => setOpenaiBaseUrl(e.target.value)}
                       placeholder="https://api.openai.com/v1 (default)"
-                      className="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                      className="w-full rounded-lg border-gray-300 dark:border-slate-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
                     />
                     <div className="mt-1.5 flex gap-2">
-                      <span className="text-xs text-gray-400 font-semibold">Proxies:</span>
+                      <span className="text-xs text-gray-400 dark:text-slate-500 font-semibold">Proxies:</span>
                       <button onClick={() => setOpenaiBaseUrl('https://api.openai.com/v1')} className="text-xs text-indigo-500 hover:underline">Official</button>
                       <button onClick={() => setOpenaiBaseUrl('https://openrouter.ai/api/v1')} className="text-xs text-indigo-500 hover:underline">OpenRouter</button>
                     </div>
@@ -612,7 +612,7 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
             {provider === 'anthropic' && (
               <div className="p-6 space-y-4 animate-in fade-in duration-150">
                 <div className="flex justify-between items-center">
-                  <h4 className="font-extrabold text-gray-900 font-sans">Anthropic Claude Configuration</h4>
+                  <h4 className="font-extrabold text-gray-900 dark:text-white font-sans">Anthropic Claude Configuration</h4>
                   <button
                     onClick={() => handleClearAPIConfig('anthropic')}
                     className="text-xs text-red-500 hover:underline font-semibold"
@@ -624,19 +624,19 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* API Key */}
                   <div className="md:col-span-2">
-                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Anthropic / Proxy Key</label>
+                    <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1">Anthropic / Proxy Key</label>
                     <div className="relative">
                       <input
                         type={showAnthropicKey ? 'text' : 'password'}
                         value={anthropicKey}
                         onChange={(e) => setAnthropicKey(e.target.value)}
                         placeholder="sk-ant-..."
-                        className="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm pr-10"
+                        className="w-full rounded-lg border-gray-300 dark:border-slate-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm pr-10"
                       />
                       <button
                         type="button"
                         onClick={() => setShowAnthropicKey(!showAnthropicKey)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500 hover:text-gray-600 text-xs"
                       >
                         {showAnthropicKey ? 'Hide' : 'Show'}
                       </button>
@@ -645,16 +645,16 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
 
                   {/* Model */}
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Claude Model Name</label>
+                    <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1">Claude Model Name</label>
                     <input
                       type="text"
                       value={anthropicModel}
                       onChange={(e) => setAnthropicModel(e.target.value)}
                       placeholder="claude-sonnet-5"
-                      className="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                      className="w-full rounded-lg border-gray-300 dark:border-slate-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
                     />
                     <div className="mt-1.5 flex gap-2">
-                      <span className="text-xs text-gray-400 font-semibold">Presets:</span>
+                      <span className="text-xs text-gray-400 dark:text-slate-500 font-semibold">Presets:</span>
                       <button onClick={() => setAnthropicModel('claude-sonnet-5')} className="text-xs text-indigo-500 hover:underline">Sonnet 5</button>
                       <button onClick={() => setAnthropicModel('claude-haiku-4-5-20251001')} className="text-xs text-indigo-500 hover:underline">Haiku 4.5</button>
                     </div>
@@ -662,11 +662,11 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
 
                   {/* Effort (Sonnet 5 / Opus 5 only - ignored on other models) */}
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Scoring Effort (Sonnet 5 / Opus 5 only)</label>
+                    <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1">Scoring Effort (Sonnet 5 / Opus 5 only)</label>
                     <select
                       value={anthropicEffort}
                       onChange={(e) => setAnthropicEffort(e.target.value as typeof anthropicEffort)}
-                      className="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                      className="w-full rounded-lg border-gray-300 dark:border-slate-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
                     >
                       <option value="low">Low - fastest, cheapest</option>
                       <option value="medium">Medium - recommended balance</option>
@@ -674,21 +674,21 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
                       <option value="xhigh">X-High - deepest reasoning</option>
                       <option value="max">Max - slowest, most expensive</option>
                     </select>
-                    <p className="mt-1 text-xs text-gray-400">Controls how much Claude reasons before scoring. Lower = faster and cheaper. Has no effect on Haiku or other providers.</p>
+                    <p className="mt-1 text-xs text-gray-400 dark:text-slate-500">Controls how much Claude reasons before scoring. Lower = faster and cheaper. Has no effect on Haiku or other providers.</p>
                   </div>
 
                   {/* Base URL */}
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Custom API Base URL (Highly recommended for CORS)</label>
+                    <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1">Custom API Base URL (Highly recommended for CORS)</label>
                     <input
                       type="text"
                       value={anthropicBaseUrl}
                       onChange={(e) => setAnthropicBaseUrl(e.target.value)}
                       placeholder="https://api.anthropic.com/v1 (default)"
-                      className="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                      className="w-full rounded-lg border-gray-300 dark:border-slate-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
                     />
                     <div className="mt-1.5 flex gap-2">
-                      <span className="text-xs text-gray-400 font-semibold">Bypass CORS:</span>
+                      <span className="text-xs text-gray-400 dark:text-slate-500 font-semibold">Bypass CORS:</span>
                       <button onClick={() => setAnthropicBaseUrl('https://openrouter.ai/api/v1')} className="text-xs text-indigo-500 hover:underline">OpenRouter</button>
                     </div>
                   </div>
@@ -703,7 +703,7 @@ export const CriteriaSettings: React.FC<CriteriaSettingsProps> = ({ criteria, on
           </div>
 
           {/* Action Footer */}
-          <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+          <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-slate-700">
             <Button variant="secondary" onClick={() => setActiveTab('metrics')}>
               Back to Metrics
             </Button>
